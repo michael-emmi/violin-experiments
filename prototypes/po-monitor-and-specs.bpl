@@ -40,7 +40,7 @@ modifies N, C;
   N := 0;
 }
 
-procedure {:inline 1} op.begin() returns (o: op)
+procedure {:inline 1} op.start() returns (o: op)
 modifies N;
 {
   o := N;
@@ -49,7 +49,7 @@ modifies N;
   N := N + 1;
 }
 
-procedure {:inline 1} op.end(o: op)
+procedure {:inline 1} op.finish(o: op)
 modifies C;
 {
   C[o] := true;
@@ -133,11 +133,11 @@ modifies added, low, high;
   high := 0;
 }
 
-procedure {:inline 1} add.begin(v: val) returns (o: op)
+procedure {:inline 1} add.start(v: val) returns (o: op)
 modifies N;
 modifies added, high;
 {
-  call o := op.begin();
+  call o := op.start();
   assume m(o) == add;
   assume v(o) == v;
   added[v] := true;
@@ -145,19 +145,19 @@ modifies added, high;
   return;
 }
 
-procedure {:inline 1} add.end(o: op)
+procedure {:inline 1} add.finish(o: op)
 modifies C;
 modifies low;
 {
-  call op.end(o);
+  call op.finish(o);
   low := low + 1;
 }
 
-procedure {:inline 1} remove.begin() returns (o: op)
+procedure {:inline 1} remove.start() returns (o: op)
 modifies N;
 modifies low, saw_empty;
 {
-  call o := op.begin();
+  call o := op.start();
   assume m(o) == remove;
   saw_empty[o] := (low <= 0);
   if (v(o) != empty) {
@@ -169,12 +169,12 @@ modifies low, saw_empty;
   return;
 }
 
-procedure {:inline 1} remove.end(o: op, v: val)
+procedure {:inline 1} remove.finish(o: op, v: val)
 modifies C;
 modifies high, saw_empty;
 {
   assume v(o) == v;
-  call op.end(o);
+  call op.finish(o);
   if (v(o) != empty) {
     high := high - 1;
   }
@@ -201,17 +201,17 @@ implementation demo()
   
   call init();
   
-  call a := add.begin(1);
-  call add.end(a);
+  call a := add.start(1);
+  call add.finish(a);
   
   // b and c are concurrent
-  call b := add.begin(2);
-  call c := remove.begin();
-  call add.end(b);
-  call remove.end(c,1);
+  call b := add.start(2);
+  call c := remove.start();
+  call add.finish(b);
+  call remove.finish(c,1);
 
-  call d := remove.begin();
-  call remove.end(d,2);
+  call d := remove.start();
+  call remove.finish(d,2);
   
   assert stack_spec(N,C,added,saw_empty); // validated
   assert queue_spec(N,C,added,saw_empty); // validated
@@ -223,18 +223,18 @@ implementation demo()
   
   call init();
   
-  call a := add.begin(1);
-  call add.end(a);
+  call a := add.start(1);
+  call add.finish(a);
   
-  // b completes before c begins
-  call b := add.begin(2);
-  call add.end(b);
+  // b completes before c starts
+  call b := add.start(2);
+  call add.finish(b);
 
-  call c := remove.begin();
-  call remove.end(c,1);
+  call c := remove.start();
+  call remove.finish(c,1);
 
-  call d := remove.begin();
-  call remove.end(d,2);
+  call d := remove.start();
+  call remove.finish(d,2);
   
   assert stack_spec(N,C,added,saw_empty); // VIOLATED
 }
@@ -245,18 +245,18 @@ implementation demo()
   
   call init();
   
-  call a := add.begin(1);
-  call add.end(a);
+  call a := add.start(1);
+  call add.finish(a);
   
-  // b completes before c begins
-  call b := add.begin(2);
-  call add.end(b);
+  // b completes before c starts
+  call b := add.start(2);
+  call add.finish(b);
 
-  call c := remove.begin();
-  call remove.end(c,1);
+  call c := remove.start();
+  call remove.finish(c,1);
 
-  call d := remove.begin();
-  call remove.end(d,2);
+  call d := remove.start();
+  call remove.finish(d,2);
   
   assert queue_spec(N,C,added,saw_empty); // validated
 }
@@ -267,21 +267,21 @@ implementation demo()
   
   call init();
   
-  call a := add.begin(1);  
-  call add.end(a);
+  call a := add.start(1);  
+  call add.finish(a);
   
-  call b := add.begin(2);
-  call add.end(b);
+  call b := add.start(2);
+  call add.finish(b);
   
-  call c := remove.begin();
-  call remove.end(c,2);
+  call c := remove.start();
+  call remove.finish(c,2);
   
-  call d := remove.begin();  
-  call remove.end(d,1);
+  call d := remove.start();  
+  call remove.finish(d,1);
 
   // definitely empty.
-  call e := remove.begin();
-  call remove.end(e,empty);
+  call e := remove.start();
+  call remove.finish(e,empty);
   
   assert stack_spec(N,C,added,saw_empty); // validated
 }
@@ -292,27 +292,27 @@ implementation demo()
   
   call init();
   
-  call a := add.begin(1);
-  call add.end(a);
+  call a := add.start(1);
+  call add.finish(a);
 
-  call b := add.begin(2);
-  call add.end(b);  
+  call b := add.start(2);
+  call add.finish(b);  
   
   // it may not be empty now ...
-  call e := remove.begin();
+  call e := remove.start();
   
-  call c := remove.begin();
-  call remove.end(c,2);  
+  call c := remove.start();
+  call remove.finish(c,2);  
 
-  call d := remove.begin();
-  call remove.end(d,1);
+  call d := remove.start();
+  call remove.finish(d,1);
   
   // ... but it is now!
 
-  call f := add.begin(3);
-  call add.end(f);
+  call f := add.start(3);
+  call add.finish(f);
 
-  call remove.end(e,empty);
+  call remove.finish(e,empty);
   
   assert stack_spec(N,C,added,saw_empty); // validated
 }
@@ -323,21 +323,21 @@ implementation demo()
   
   call init();
   
-  call a := add.begin(1);
-  call add.end(a);
+  call a := add.start(1);
+  call add.finish(a);
   
-  call b := add.begin(2);
-  call add.end(b);
+  call b := add.start(2);
+  call add.finish(b);
   
-  call c := remove.begin();
-  call remove.end(c,2);
+  call c := remove.start();
+  call remove.finish(c,2);
 
   // it was never empty during this operation.
-  call e := remove.begin();
-  call remove.end(e,empty);
+  call e := remove.start();
+  call remove.finish(e,empty);
   
-  call d := remove.begin();
-  call remove.end(d,1);
+  call d := remove.start();
+  call remove.finish(d,1);
   
   assert stack_spec(N,C,added,saw_empty); // VIOLATED
 }

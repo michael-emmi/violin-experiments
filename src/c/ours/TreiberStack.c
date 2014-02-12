@@ -1,9 +1,6 @@
-#include<stdio.h>
-#include<stdlib.h>
-
-typedef int bool;
-#define true 1
-#define false 0
+#include <stdio.h>
+#include <stdlib.h>
+#include <smack.h>
 
 struct cell {
     int data;
@@ -17,10 +14,11 @@ void initialize() {
 }
 
 bool cas(struct cell **p, struct cell* t, struct cell *x) {
-    if (*p == t) {
-        *p = x;
-        return true;
-    } else return false;
+  if (*p == t) {
+    __SMACK_code("assume {:yield} true;");
+    *p = x;
+    return true;
+  } else return false;
 }
 
 
@@ -49,12 +47,18 @@ int pop () {
 
 
 int main() {
-    push(3);
-    push(4);
-    push(5);
-    push(6);
-    int i;
-    for (i = 0; i < 5; i++) {
-        printf("popped: %i\n",pop());
-    }
+  __SMACK_top_decl("axiom {:method \"add\", \"push\"} true;");
+  __SMACK_top_decl("axiom {:method \"remove\", \"pop\"} true;");
+
+  __SMACK_decl("var x: int;");
+
+  __SMACK_code("call {:async} @(@);", push, 1);
+  // __SMACK_code("call {:async} @(@);", push, 2);
+  __SMACK_code("call {:async} x := @();", pop);
+  __SMACK_code("call {:async} x := @();", pop);
+
+  __SMACK_code("assume {:yield} true;");
+  __SMACK_code("assert {:spec \"stack_spec\"} true;");
+
+  return 0;
 }
