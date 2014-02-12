@@ -118,66 +118,73 @@ returns (bool) {
 }
 
 var added: [val] bool;
-var count: int;
+var low, high: int;
+// invariant (low <= high)
 var saw_empty: [op] bool;
 
 procedure {:inline 1} init()
 modifies N, C;
-modifies added, count;
+modifies added, low, high;
 {
   call op.init();
   assume (forall v: val :: !added[v]);
   assume (forall o: op :: !saw_empty[o]);
-  count := 0;
+  low := 0;
+  high := 0;
 }
 
 procedure {:inline 1} add.begin(v: val) returns (o: op)
 modifies N;
-modifies added, count;
+modifies added, high;
 {
   call o := op.begin();
   assume m(o) == add;
   assume v(o) == v;
   added[v] := true;
-  count := count + 1;
+  high := high + 1;
   return;
 }
 
 procedure {:inline 1} add.end(o: op)
 modifies C;
+modifies low;
 {
   call op.end(o);
+  low := low + 1;
 }
 
 procedure {:inline 1} remove.begin() returns (o: op)
 modifies N;
-modifies saw_empty;
+modifies low, saw_empty;
 {
   call o := op.begin();
   assume m(o) == remove;
-  saw_empty[o] := (count == 0);
+  saw_empty[o] := (low <= 0);
+  if (v(o) != empty) {
+    low := low - 1;
+    if (low == 0) {
+      call see_empty();
+    }
+  }
   return;
 }
 
 procedure {:inline 1} remove.end(o: op, v: val)
 modifies C;
-modifies count, saw_empty;
+modifies high, saw_empty;
 {
   assume v(o) == v;
   call op.end(o);
-  if (count > 0) {
-    count := count - 1;
-  }
-  if (count == 0) {
-    call see_empty();
+  if (v(o) != empty) {
+    high := high - 1;
   }
   return;
 }
 
 procedure see_empty();
 modifies saw_empty;
-ensures count == 0 ==> (forall o: op :: active(o,N,C) ==> saw_empty[o]);
-ensures count == 0 ==> 
+ensures low == 0 ==> (forall o: op :: active(o,N,C) ==> saw_empty[o]);
+ensures low == 0 ==> 
   (forall o: op :: !active(o,N,C) ==> saw_empty[o] == old(saw_empty[o]));
 
 /******************************************************************************/
@@ -186,7 +193,7 @@ ensures count == 0 ==>
 
 procedure demo();
 modifies N, C;
-modifies added, count, saw_empty;
+modifies added, low, high, saw_empty;
 
 implementation demo()
 {
@@ -260,7 +267,7 @@ implementation demo()
   
   call init();
   
-  call a := add.begin(1);
+  call a := add.begin(1);  
   call add.end(a);
   
   call b := add.begin(2);
@@ -269,7 +276,7 @@ implementation demo()
   call c := remove.begin();
   call remove.end(c,2);
   
-  call d := remove.begin();
+  call d := remove.begin();  
   call remove.end(d,1);
 
   // definitely empty.
