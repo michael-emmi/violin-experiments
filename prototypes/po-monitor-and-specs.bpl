@@ -45,7 +45,7 @@ modifies N;
 {
   o := N;
   assume (forall oo: op :: completed(oo,C) ==> bef(oo,o));
-  assume (forall oo: op :: active(oo,N,C) ==> !(o <: oo) && !(oo <: o));
+  assume (forall oo: op :: active(oo,N,C) ==> !bef(o,oo) && !bef(oo,o));
   N := N + 1;
 }
 
@@ -80,13 +80,13 @@ function unique_removes(N: int, C: [op] bool) returns (bool) {
   )
 }
 
-function no_false_empty(N: int, C: [op] bool, E: [op] bool) returns (bool) {
-  (forall o: op :: completed(o,C) && m(o) == remove && v(o) == empty ==> E[o])
+function no_false_empty(N: int, C: [op] bool, W: [op] bool) returns (bool) {
+  (forall o: op :: completed(o,C) && m(o) == remove && v(o) == empty ==> W[o])
 }
 
-function bag_spec(N: int, C: [op] bool, A: [val] bool, E: [op] bool) 
+function bag_spec(N: int, C: [op] bool, A: [val] bool, W: [op] bool) 
 returns (bool) {
-  no_thinair(N,C,A) && unique_removes(N,C) && no_false_empty(N,C,E)
+  no_thinair(N,C,A) && unique_removes(N,C) && no_false_empty(N,C,W)
 }
 
 function stack_order(N: int, C: [op] bool) returns (bool) {
@@ -94,7 +94,7 @@ function stack_order(N: int, C: [op] bool) returns (bool) {
     started(o1,N) && started(o2,N) && completed(o1',C) && completed(o2',C)
     && uniq4(o1,o2,o1',o2') 
     && match(o1,o1') && match(o2,o2')
-    && o1' <: o2' ==> bef?(o2,o1) || (bef?(o1,o2) && bef?(o1',o2))
+    && bef(o1',o2') ==> bef?(o2,o1) || (bef?(o1,o2) && bef?(o1',o2))
   )
 }
 
@@ -103,18 +103,18 @@ function queue_order(N: int, C: [op] bool) returns (bool) {
     started(o1,N) && started(o2,N) && completed(o1',C) && completed(o2',C)
     && uniq4(o1,o2,o1',o2')
     && match(o1,o1') && match (o2,o2')
-    && o1' <: o2' ==> bef?(o1,o2)
+    && bef(o1',o2') ==> bef?(o1,o2)
   )
 }
 
-function stack_spec(N: int, C: [op] bool, A: [val] bool, E: [op] bool)
+function stack_spec(N: int, C: [op] bool, A: [val] bool, W: [op] bool)
 returns (bool) {
-  bag_spec(N,C,A,E) && stack_order(N,C)
+  bag_spec(N,C,A,W) && stack_order(N,C)
 }
 
-function queue_spec(N: int, C: [op] bool, A: [val] bool, E: [op] bool)
+function queue_spec(N: int, C: [op] bool, A: [val] bool, W: [op] bool)
 returns (bool) {
-  bag_spec(N,C,A,E) && queue_order(N,C)
+  bag_spec(N,C,A,W) && queue_order(N,C)
 }
 
 var A, R: [val] bool;

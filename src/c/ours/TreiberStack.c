@@ -15,7 +15,7 @@ void initialize() {
 
 bool cas(struct cell **p, struct cell* t, struct cell *x) {
   if (*p == t) {
-    __SMACK_code("assume {:yield} true;");
+    // __SMACK_code("assume {:yield} true;");
     *p = x;
     return true;
   } else return false;
@@ -26,6 +26,7 @@ void push (int v) {
     struct cell *t;
     struct cell *x = malloc(sizeof *x);
     x->data = v;
+    
     do {
         t = s;
         x->next = t;
@@ -33,6 +34,10 @@ void push (int v) {
 }
 
 int pop () {
+
+  __SMACK_code("call boogie_si_record_bool(A[1]);");
+  __SMACK_code("call boogie_si_record_bool(R[1]);");
+  
     struct cell *t;
     struct cell *x = malloc(sizeof *x);
     do {
@@ -51,6 +56,8 @@ int main() {
   __SMACK_top_decl("axiom {:method \"remove\", \"pop\"} true;");
 
   __SMACK_decl("var x: int;");
+  
+  initialize();
 
   __SMACK_code("call {:async} @(@);", push, 1);
   // __SMACK_code("call {:async} @(@);", push, 2);
@@ -58,7 +65,16 @@ int main() {
   __SMACK_code("call {:async} x := @();", pop);
 
   __SMACK_code("assume {:yield} true;");
-  __SMACK_code("assert {:spec \"stack_spec\"} true;");
+  
+  __SMACK_code("call boogie_si_record_bool(W[2]);");
+  __SMACK_code("call boogie_si_record_bool(A[1]);");
+  __SMACK_code("call boogie_si_record_bool(R[1]);");
+
+  // __SMACK_code("assert {:spec \"no_thinair\"} true;");
+  // __SMACK_code("assert {:spec \"unique_removes\"} true;");
+  __SMACK_code("assert {:spec \"no_false_empty\"} true;");
+  // __SMACK_code("assert {:spec \"bag_spec\"} true;");
+  // __SMACK_code("assert {:spec \"stack_spec\"} true;");
 
   return 0;
 }
