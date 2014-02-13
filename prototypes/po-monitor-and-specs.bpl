@@ -68,9 +68,9 @@ function match(o1: op, o2: op) returns (bool) {
   m(o1) == add && m(o2) == remove && v(o1) == v(o2) 
 }
 
-function no_thinair(N: int, C: [op] bool, added: [int] bool) returns (bool) {
+function no_thinair(N: int, C: [op] bool, A: [int] bool) returns (bool) {
   (forall o: op :: completed(o,C) && m(o) == remove ==> 
-    added[v(o)] || v(o) == empty
+    A[v(o)] || v(o) == empty
   )
 }
 
@@ -117,52 +117,56 @@ returns (bool) {
   bag_spec(N,C,A,E) && queue_order(N,C)
 }
 
-var added: [val] bool;
-var low, high: int;
-// invariant (low <= high)
-var saw_empty: [op] bool;
+var A, R: [val] bool;
+var W: [op] bool;
+
+function sees_empty(A: [val] bool, R: [val] bool) returns (bool) {
+  (forall v: val :: A[v] ==> R[v])
+}
+
+procedure see_empty();
+modifies W;
+ensures sees_empty(A,R) ==> (forall o: op :: active(o,N,C) ==> W[o]);
+ensures sees_empty(A,R) ==> (forall o: op :: !active(o,N,C) ==> W[o] == old(W[o]));
 
 procedure {:inline 1} init()
 modifies N, C;
-modifies added, low, high;
 {
   call op.init();
-  assume (forall v: val :: !added[v]);
-  assume (forall o: op :: !saw_empty[o]);
-  low := 0;
-  high := 0;
+  assume (forall v: val :: !A[v]);
+  assume (forall v: val :: !R[v]);
+  assume (forall o: op :: !W[o]);
 }
 
 procedure {:inline 1} add.start(v: val) returns (o: op)
 modifies N;
-modifies added, high;
 {
   call o := op.start();
   assume m(o) == add;
   assume v(o) == v;
-  added[v] := true;
-  high := high + 1;
   return;
 }
 
 procedure {:inline 1} add.finish(o: op)
 modifies C;
-modifies low;
+modifies A;
 {
   call op.finish(o);
-  low := low + 1;
+  A[v(o)] := true;
 }
 
 procedure {:inline 1} remove.start() returns (o: op)
 modifies N;
-modifies low, saw_empty;
+modifies R, W;
 {
   call o := op.start();
   assume m(o) == remove;
-  saw_empty[o] := (low <= 0);
-  if (v(o) != empty) {
-    low := low - 1;
-    if (low == 0) {
+  if (v(o) == empty) {
+    W[o] := sees_empty(A,R);
+    
+  } else {
+    R[v(o)] := true;
+    if (sees_empty(A,R)) {
       call see_empty();
     }
   }
@@ -171,29 +175,19 @@ modifies low, saw_empty;
 
 procedure {:inline 1} remove.finish(o: op, v: val)
 modifies C;
-modifies high, saw_empty;
 {
   assume v(o) == v;
   call op.finish(o);
-  if (v(o) != empty) {
-    high := high - 1;
-  }
   return;
 }
 
-procedure see_empty();
-modifies saw_empty;
-ensures low == 0 ==> (forall o: op :: active(o,N,C) ==> saw_empty[o]);
-ensures low == 0 ==> 
-  (forall o: op :: !active(o,N,C) ==> saw_empty[o] == old(saw_empty[o]));
-
 /******************************************************************************/
-/*  DEMOS   (1)   assertion   validated,    and   (2)   assertion   violated  */
+/*           DEMOS:              4 VERIFIED,             3 ERRORS             */
 /******************************************************************************/
 
 procedure demo();
 modifies N, C;
-modifies added, low, high, saw_empty;
+modifies A, R, W;
 
 implementation demo()
 {
@@ -213,8 +207,8 @@ implementation demo()
   call d := remove.start();
   call remove.finish(d,2);
   
-  assert stack_spec(N,C,added,saw_empty); // validated
-  assert queue_spec(N,C,added,saw_empty); // validated
+  assert stack_spec(N,C,A,W); // validated
+  assert queue_spec(N,C,A,W); // validated
 }
 
 implementation demo()
@@ -236,7 +230,7 @@ implementation demo()
   call d := remove.start();
   call remove.finish(d,2);
   
-  assert stack_spec(N,C,added,saw_empty); // VIOLATED
+  assert stack_spec(N,C,A,W); // VIOLATED
 }
 
 implementation demo()
@@ -258,7 +252,7 @@ implementation demo()
   call d := remove.start();
   call remove.finish(d,2);
   
-  assert queue_spec(N,C,added,saw_empty); // validated
+  assert queue_spec(N,C,A,W); // validated
 }
 
 implementation demo()
@@ -283,7 +277,7 @@ implementation demo()
   call e := remove.start();
   call remove.finish(e,empty);
   
-  assert stack_spec(N,C,added,saw_empty); // validated
+  assert stack_spec(N,C,A,W); // validated
 }
 
 implementation demo()
@@ -314,7 +308,7 @@ implementation demo()
 
   call remove.finish(e,empty);
   
-  assert stack_spec(N,C,added,saw_empty); // validated
+  assert stack_spec(N,C,A,W); // validated
 }
 
 implementation demo()
@@ -339,5 +333,38 @@ implementation demo()
   call d := remove.start();
   call remove.finish(d,1);
   
-  assert stack_spec(N,C,added,saw_empty); // VIOLATED
+  assert stack_spec(N,C,A,W); // VIOLATED
+}
+
+implementation demo()
+{
+  var a, b, c, d, e: op;
+  
+  call init();
+  
+  // Constantin's counterexample, violates no_false_empty
+
+  call a := add.start(1);      // -.
+                               //  A: add(1)
+                               //  |
+  call b := add.start(2);      // ----.
+                               //  |  |
+  call add.finish(a);          // -'  B: add(2)
+                               //     |
+  call e := remove.start();    // -------.
+                               //     |  E: rem => empty
+                               //     |  |
+  call c := remove.start();    // ----------.
+                               //     |  |  |
+  call add.finish(b);          // ----'  |  C: rem => 2
+                               //        |  |
+  call remove.finish(c,2);     // ----------'
+                               //        |
+  call remove.finish(e,empty); // -------'
+                               //
+  call d := remove.start();    // -.
+                               //  D: rem => 1
+  call remove.finish(d,1);     // -'
+
+  assert no_false_empty(N,C,W); // VIOLATED
 }
