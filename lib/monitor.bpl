@@ -135,10 +135,10 @@ modifies N, C;
 procedure add.start(v: val) returns (o: op)
 modifies N;
 {
-  call boogie_si_record_int(v);
   call o := op.start();
   assume m(o) == add;
   assume v(o) == v;
+  call boogie_si_record_int(v);
   return;
 }
 
@@ -155,11 +155,9 @@ modifies N;
 modifies R, W;
 {
   call o := op.start();
-  call boogie_si_record_int(o);
   assume m(o) == remove;
   if (v(o) == empty) {
     W[o] := sees_empty(A,R);
-    call boogie_si_record_bool(W[o]);
     
   } else {
     R[v(o)] := true;
@@ -173,8 +171,8 @@ modifies R, W;
 procedure remove.finish(o: op, v: val)
 modifies C;
 {
-  call boogie_si_record_int(v);
   assume v(o) == v;
   call op.finish(o);
+  call boogie_si_record_int(v);
   return;
 }
