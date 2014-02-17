@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <string.h>
+#include <smack.h>
 
 #define MAX_THREADS 10
 
@@ -100,8 +101,6 @@ size_t TryCollision(ThreadInfo* p,ThreadInfo* q,size_t mypid,size_t him) {
 	return 0;
 }
 
-
-
 void LesOP(ThreadInfo *p) {
 	while (1) {
 		location[p->id]=p;
@@ -133,10 +132,6 @@ void LesOP(ThreadInfo *p) {
 		if (TryPerformStackOp(p)==1)
 			return;
 	}
-}
-
-int f(int x,int y) {
-	printf("%d %d",x,y);
 }
 
 void StackOp(ThreadInfo* pInfo) {
@@ -176,11 +171,23 @@ int Pop( ) {
 		m0=1;
 	else if (temp->cell->pdata == 1)
 		m1=1;
-	f(m0,m1);
 	return temp->cell->pdata;
 }
 
 int main() {
+  __SMACK_top_decl("axiom {:method \"add\", \"Push\"} true;");
+  __SMACK_top_decl("axiom {:method \"remove\", \"Pop\"} true;");
 
+  __SMACK_decl("var x: int;");
+
+  Init();
+
+  __SMACK_code("call {:async} @(@);", Push, 1);
+  __SMACK_code("call {:async} x := @();", Pop);
+  __SMACK_code("call {:async} x := @();", Pop);
+  __SMACK_code("assume {:yield} true;");
+  __SMACK_code("assert {:spec \"stack_spec\"} true;");
+
+  return 0;
 }
 

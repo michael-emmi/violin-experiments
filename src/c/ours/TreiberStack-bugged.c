@@ -15,6 +15,7 @@ void initialize() {
 
 bool cas(struct cell **p, struct cell* t, struct cell *x) {
   if (*p == t) {
+    __SMACK_code("assume {:yield} true;");
     *p = x;
     return true;
   } else return false;

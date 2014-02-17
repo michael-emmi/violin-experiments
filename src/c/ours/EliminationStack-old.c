@@ -5,6 +5,8 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <string.h>
+#include <smack.h>
+
 
 #define MAX_THREADS 10
 
@@ -31,36 +33,38 @@ typedef  struct Simple_Stack {
 	Cell* ptop;
 } Simple_Stack;
 
-Simple_Stack S;
+Simple_Stack* S;
 ThreadInfo** location;
 size_t* collision;
 size_t id_count;
 
-void Init(){
+void Init() {
 	location = malloc(MAX_THREADS*sizeof(ThreadInfo*));
 	collision = malloc(MAX_THREADS*sizeof(size_t));
 	memset(collision,0,MAX_THREADS*sizeof(size_t));
+  S = malloc(sizeof(Simple_Stack));
+	S->ptop = NULL;
 	id_count = 1;
 }
 
 bool TryPerformStackOp(ThreadInfo* p){
 	Cell *phead,*pnext;
 	if(p->op==PUSH) {
-		phead=S.ptop;
+		phead=S->ptop;
 		p->cell->pnext=phead;
-		if(__atomic_compare_exchange_n(&S.ptop,&phead,p->cell,true,0,0))
+		if(__atomic_compare_exchange_n(&S->ptop,&phead,p->cell,true,0,0))
 			return true;
 		else
 			return false;
 	}
 	if(p->op==POP) {
-		phead=S.ptop;
+		phead=S->ptop;
 		if(phead==NULL) {
 			p->empty=true;
 			return true;
 		}
 		pnext=phead->pnext;
-		if(__atomic_compare_exchange_n(&S.ptop,&phead,pnext,true,0,0)) {
+		if(__atomic_compare_exchange_n(&S->ptop,&phead,pnext,true,0,0)) {
 			p->cell=phead;
 			return true;
 		}
@@ -133,10 +137,6 @@ void LesOP(ThreadInfo *p) {
 	}
 }
 
-int f(int x,int y) {
-	printf("%d %d",x,y);
-}
-
 void StackOp(ThreadInfo* pInfo) {
 	if(TryPerformStackOp(pInfo)==false)
 		LesOP(pInfo);
@@ -174,11 +174,22 @@ int Pop( ) {
 		m0=1;
 	else if (temp->cell->pdata == 1)
 		m1=1;
-	f(m0,m1);
 	return temp->cell->pdata;
 }
 
 int main() {
+  __SMACK_top_decl("axiom {:method \"add\", \"Push\"} true;");
+  __SMACK_top_decl("axiom {:method \"remove\", \"Pop\"} true;");
 
+  __SMACK_decl("var x: int;");
+
+  Init();
+
+  __SMACK_code("call {:async} @(@);", Push, 1);
+  __SMACK_code("call {:async} x := @();", Pop);
+  __SMACK_code("call {:async} x := @();", Pop);
+  __SMACK_code("assume {:yield} true;");
+  __SMACK_code("assert {:spec \"stack_spec\"} true;");
+
+  return 0;
 }
-
