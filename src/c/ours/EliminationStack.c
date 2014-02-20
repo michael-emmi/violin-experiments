@@ -64,6 +64,7 @@ void LesOP(struct ThreadInfo *p) {
     int pos = GetPosition(p); // CONSTANTIN: pos = random() % MAX_THREADS
 		int him = collision[pos];
 
+    __SMACK_code("assume {:yield} true;");
 		while (!CAS(&collision[pos],him,mypid))
 			him = collision[pos];
 
@@ -71,6 +72,7 @@ void LesOP(struct ThreadInfo *p) {
 			struct ThreadInfo* q = location[him];
 
 			if(q != NULL && q->id == him && q->op != p->op) {
+        __SMACK_code("assume {:yield} true;");
 				if (CAS(&location[mypid],p,NULL)) {
 					if (TryCollision(p,q,him) == true)
 						return;
@@ -84,7 +86,8 @@ void LesOP(struct ThreadInfo *p) {
 			}
 		}
 		delay(p->spin); // CONSTANTIN: sleep(p->spin)
-    
+
+    __SMACK_code("assume {:yield} true;");
 		if (!CAS(&location[mypid],p,NULL)) {
 			FinishCollision(p);
 			return;
@@ -102,6 +105,7 @@ bool TryPerformStackOp(struct ThreadInfo* p) {
 	if (p->op==PUSH) {
 		phead = S.ptop;
 		p->cell.pnext = phead;
+    __SMACK_code("assume {:yield} true;");
 		if(CAS(&S.ptop,phead,&p->cell))
 			return true;
 		else
@@ -115,6 +119,7 @@ bool TryPerformStackOp(struct ThreadInfo* p) {
 		}
 		pnext = phead->pnext;
 
+    __SMACK_code("assume {:yield} true;");
 		if (CAS(&S.ptop,phead,pnext)) {
 			p->cell = *phead;
 			return true;
@@ -140,12 +145,14 @@ bool TryCollision(struct ThreadInfo *p, struct ThreadInfo *q, int him) {
   int mypid = p->id;
 
 	if (p->op == PUSH) {
+    __SMACK_code("assume {:yield} true;");
 		if (CAS(&location[him],q,p))
 			return true;
 		else
 			return false;
 	}
 	if(p->op == POP) {
+    __SMACK_code("assume {:yield} true;");
 		if(CAS(&location[him],q,NULL)){
 			p->cell=q->cell;
 			location[mypid]=NULL;

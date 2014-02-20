@@ -56,7 +56,7 @@ procedure op.finish(o: op)
 modifies C;
 {
   C[o] := true;
-  assume completed(oo,C); // for triggering purposes...
+  assume completed(o,C); // for triggering purposes...
 }
 
 /******************************************************************************/
