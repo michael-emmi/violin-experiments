@@ -27,9 +27,7 @@ def check(bpl_src, args = {})
   u = args[:unroll] || 1
   v = args[:verifier] || :boogie_si
   
-  command = "violin.rb #{bpl_src} \
-    --verifier #{v} #{case v when :boogie_si; "-r #{u}" else "-l #{u}" end} \
-    -d #{d}"
+  command = "violin.rb #{bpl_src} --verifier #{v} -u #{u} -d #{d} -v -k"
   
   output = `#{command} 2>&1`
 
@@ -48,8 +46,8 @@ end
 def search(bpl_src, args = {})
   args[:delays] ||= 0
   args[:unroll] ||= 1
-  args[:delay_limit] ||= 5
-  args[:unroll_limit] ||= 5
+  args[:delay_limit] ||= 6
+  args[:unroll_limit] ||= 6
   
   res = nil
   
@@ -77,4 +75,4 @@ puts "=" * 80
 # one_test 'src/c/ours/TreiberStack.c'
 # one_test 'src/c/ours/TreiberStack-bugged.c'
 
-one_test 'src/c/ours/EliminationStack.c'
+one_test 'src/c/ours/EliminationStack.c', verifier: :boogie_si

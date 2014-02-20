@@ -15,8 +15,17 @@ function active(o: op, N: int, C: [op] bool) returns (bool) {
   started(o,N) && !completed(o,C) 
 }
 
-function bef(o1, o2: op) returns (bool) { o1 <: o2 }
-function bef?(o1, o2: op) returns (bool) { !(o2 <: o1) }
+// WITH BOOGIE's POLYMORPHIC PARTIAL ORDER ...
+// function bef(o1, o2: op) returns (bool) { o1 <: o2 }
+// function bef?(o1, o2: op) returns (bool) { !(o2 <: o1) }
+
+// ALTERNATE VERSION WITH MONOMORPHIC PARTIAL ORDER ...
+function $po(i,j: int) returns (bool);
+axiom (forall i: int :: $po(i,i));
+axiom (forall i, j: int :: $po(i,j) && $po(j,i) ==> i == j);
+axiom (forall i, j, k: int :: $po(i,j) && $po(j,k) ==> $po(i,k));
+function bef(o1, o2: op) returns (bool) { $po(o1,o2) }
+function bef?(o1, o2: op) returns (bool) { !$po(o2,o1) }
 
 function uniq4(o1,o2,o3,o4: op) returns (bool) {
   o1 != o2 && o1 != o3 && o1 != o4 && o2 != o3 && o2 != o4 && o3 != o4
@@ -47,6 +56,7 @@ procedure op.finish(o: op)
 modifies C;
 {
   C[o] := true;
+  assume completed(oo,C); // for triggering purposes...
 }
 
 /******************************************************************************/

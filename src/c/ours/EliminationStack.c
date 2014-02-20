@@ -7,112 +7,72 @@
 #include <string.h>
 #include <smack.h>
 
-#define MAX_THREADS 10
+#define CAS(x,y,z) __atomic_compare_exchange_n(x,&(y),z,true,0,0)
 
-typedef enum stack_op
-  {
-    POP = 0,
-    PUSH
-  } stack_op;
+#define N 100
 
-typedef struct Cell {
-	struct Cell* pnext;
-	size_t pdata;
-} Cell;
+enum stack_op { POP = 0, PUSH };
 
-typedef  struct ThreadInfo {
-	size_t id;
-	stack_op op;
-	Cell* cell;
-	int spin;
-	size_t empty;
-} ThreadInfo;
+struct Cell {
+	struct Cell *pnext;
+	int          pdata;
+};
 
-typedef  struct Simple_Stack {
-	Cell* ptop;
-} Simple_Stack;
+struct ThreadInfo {
+	unsigned int id;
+  char         op;
+  struct Cell  cell;
+  int          spin;
+};
 
-Simple_Stack* S;
-ThreadInfo** location;
-size_t* collision;
-size_t id_count;
+struct Simple_Stack {
+	struct Cell *ptop;
+};
 
-void Init(){
-	location = malloc(MAX_THREADS*sizeof(ThreadInfo*));
-	collision = malloc(MAX_THREADS*sizeof(size_t));
-	memset(collision,0,MAX_THREADS*sizeof(size_t));
-  S = malloc(sizeof(Simple_Stack));
-	S->ptop = NULL;
-	id_count = 1;
+struct Cell EMPTY = { .pnext = NULL, .pdata = -1 };
+struct Simple_Stack S = { .ptop = NULL };
+struct ThreadInfo *location[N];
+int collision[N];
+
+int unique_id = 0;
+
+void StackOp(struct ThreadInfo *p);
+void LesOP(struct ThreadInfo *p);
+bool TryPerformStackOp(struct ThreadInfo *p);
+void FinishCollision(struct ThreadInfo *p);
+bool TryCollision(struct ThreadInfo *p, struct ThreadInfo *q, int him);
+
+int GetPosition(struct ThreadInfo *p) {
+  int pos;
+  pos = __SMACK_nondet();
+  __SMACK_assume(0 <= pos && pos < N);
+  return pos;
+}
+void delay(int d);
+
+void StackOp(struct ThreadInfo *p) {
+	if (TryPerformStackOp(p) == false)
+		LesOP(p);
+	return;
 }
 
-size_t TryPerformStackOp(ThreadInfo* p){
-	Cell *phead,*pnext;
-	if(p->op==PUSH) {
-		phead=S->ptop;
-		p->cell->pnext=phead;
-		if(__atomic_compare_exchange_n(&S->ptop,&phead,p->cell,true,0,0))
-			return 1;
-		else
-			return 0;
-	}
-	if(p->op==POP) {
-		phead=S->ptop;
-		if(phead==NULL) {
-			p->empty=1;
-			return 1;
-		}
-		pnext=phead->pnext;
-		if(__atomic_compare_exchange_n(&S->ptop,&phead,pnext,true,0,0)) {
-			p->cell=phead;
-			return 1;
-		}
-		else {
-			p->empty=1;
-			return 0;
-		}
-	}
-	return 0;
-}
+void LesOP(struct ThreadInfo *p) {
+  int mypid = p->id;
 
-void FinishCollision(ThreadInfo *p) {
-	if (p->op==POP) {
-		p->cell=((ThreadInfo*)location[p->id])->cell;
-		location[p->id]=NULL;
-	}
-}
-
-size_t TryCollision(ThreadInfo* p,ThreadInfo* q,size_t mypid,size_t him) {
-	if(p->op == PUSH) {
-		if(__atomic_compare_exchange_n(&location[him],&q,p,true,0,0))
-			return 1;
-		else
-			return 0;
-	}
-	if(p->op == POP) {
-		if(__atomic_compare_exchange_n(&location[him],&q,NULL,true,0,0)){
-			p->cell=q->cell;
-			location[mypid]=NULL;
-			return 1;
-		}
-		else
-			return 0;
-	}
-	return 0;
-}
-
-void LesOP(ThreadInfo *p) {
 	while (1) {
-		location[p->id]=p;
-		size_t pos=random()%MAX_THREADS;
-		size_t him=collision[pos];
-		while(!__atomic_compare_exchange_n(&collision[pos],&him,p->id,true,0,0))
-			him=collision[pos];
-		if (him!=0) { // 0 means empty
-			ThreadInfo* q=(ThreadInfo*)location[him];
-			if(q != NULL && q->id==him && q->op!=p->op) {
-				if(__atomic_compare_exchange_n(&location[p->id],&p,NULL,true,0,0)) {
-					if(TryCollision(p,q,p->id,him)==1)
+		location[mypid] = p;
+    int pos = GetPosition(p); // CONSTANTIN: pos = random() % MAX_THREADS
+		int him = collision[pos];
+
+		while (!CAS(&collision[pos],him,mypid))
+			him = collision[pos];
+
+		if (location[him]->cell.pdata != EMPTY.pdata) {
+			struct ThreadInfo* q = location[him];
+
+			if(q != NULL && q->id == him && q->op != p->op) {
+				if (CAS(&location[mypid],p,NULL)) {
+					if (TryCollision(p,q,him) == true)
 						return;
 					else
 						goto stack;
@@ -123,55 +83,100 @@ void LesOP(ThreadInfo *p) {
 				}
 			}
 		}
-		sleep(p->spin);
-		if (!__atomic_compare_exchange_n(&location[p->id],&p,NULL,true,0,0)) {
+		delay(p->spin); // CONSTANTIN: sleep(p->spin)
+    
+		if (!CAS(&location[mypid],p,NULL)) {
 			FinishCollision(p);
 			return;
 		}
-		stack:
-		if (TryPerformStackOp(p)==1)
+
+stack:
+		if (TryPerformStackOp(p) == true)
 			return;
 	}
 }
 
-void StackOp(ThreadInfo* pInfo) {
-	if(TryPerformStackOp(pInfo)==0)
-		LesOP(pInfo);
-	return;
+bool TryPerformStackOp(struct ThreadInfo* p) {
+	struct Cell *phead, *pnext;
+  
+	if (p->op==PUSH) {
+		phead = S.ptop;
+		p->cell.pnext = phead;
+		if(CAS(&S.ptop,phead,&p->cell))
+			return true;
+		else
+			return false;
+	}
+	if (p->op==POP) {
+		phead = S.ptop;
+		if (phead == NULL) {
+      p->cell = EMPTY;
+			return true;
+		}
+		pnext = phead->pnext;
+
+		if (CAS(&S.ptop,phead,pnext)) {
+			p->cell = *phead;
+			return true;
+		}
+		else {
+      p->cell = EMPTY;
+			return false;
+		}
+	}
+	return false;
 }
 
-void Push(size_t x) {
-	ThreadInfo* temp = malloc(sizeof(ThreadInfo));
-	temp->id = id_count;
-	id_count++;
-	temp->op = PUSH;
-	Cell* c1 = malloc(sizeof(Cell));
-	c1->pdata = x;
-	temp->cell = c1;
-	temp->spin = 1;
-	temp->empty = 0;
-	StackOp(temp);
+void FinishCollision(struct ThreadInfo *p) {
+  int mypid = p->id;
+  
+	if (p->op == POP) {
+    p->cell = location[mypid]->cell;
+		location[mypid] = NULL;
+	}
 }
 
-int Pop( ) {
-	ThreadInfo* temp = malloc(sizeof(ThreadInfo));
-	temp->id = id_count;
-	id_count++;
-	temp->op = POP;
-/*	Cell* c1 = malloc(sizeof(Cell));
-	c1->pdata = x;
-	temp->cell = *c1; */
-	temp->spin = 1;
-	temp->empty = 0;
-	StackOp(temp);
-	int m0,m1;
-	if (temp->empty == 1)
-		return -1;
-	else if (temp->cell->pdata == 0)
-		m0=1;
-	else if (temp->cell->pdata == 1)
-		m1=1;
-	return temp->cell->pdata;
+bool TryCollision(struct ThreadInfo *p, struct ThreadInfo *q, int him) {
+  int mypid = p->id;
+
+	if (p->op == PUSH) {
+		if (CAS(&location[him],q,p))
+			return true;
+		else
+			return false;
+	}
+	if(p->op == POP) {
+		if(CAS(&location[him],q,NULL)){
+			p->cell=q->cell;
+			location[mypid]=NULL;
+			return true;
+		}
+		else
+			return false;
+	}
+	return false;
+}
+
+void Init() {
+  // TODO the collision array should be initial clear
+}
+
+void Push(int x) {
+	struct ThreadInfo *ti = malloc(sizeof(struct ThreadInfo));
+  ti->id = unique_id++;
+	ti->op = PUSH;
+  ti->cell.pdata = x;
+  ti->spin = 1;
+	StackOp(ti);
+}
+
+int Pop() {
+	struct ThreadInfo *ti = malloc(sizeof(struct ThreadInfo));
+  ti->id = unique_id++;
+  ti->op = POP;
+  ti->spin = 1;
+	StackOp(ti);
+  return ti->cell.pdata;
 }
 
 int main() {
@@ -183,10 +188,15 @@ int main() {
   Init();
 
   __SMACK_code("call {:async} @(@);", Push, 1);
+  __SMACK_code("call {:async} @(@);", Push, 2);
   __SMACK_code("call {:async} x := @();", Pop);
   __SMACK_code("call {:async} x := @();", Pop);
+  
   __SMACK_code("assume {:yield} true;");
-  __SMACK_code("assert {:spec \"stack_spec\"} true;");
+  // __SMACK_code("assert {:spec \"no_thinair\"} true;");
+  // __SMACK_code("assert {:spec \"unique_removes\"} true;");
+  // __SMACK_code("assert {:spec \"no_false_empty\"} true;");
+  __SMACK_code("assert {:spec \"stack_order\"} true;");
 
   return 0;
 }
