@@ -148,7 +148,6 @@ modifies N;
   call o := op.start();
   assume m(o) == add;
   assume v(o) == v;
-  call boogie_si_record_int(v);
   return;
 }
 
@@ -183,6 +182,5 @@ modifies C;
 {
   assume v(o) == v;
   call op.finish(o);
-  call boogie_si_record_int(v);
   return;
 }

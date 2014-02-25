@@ -8,7 +8,7 @@ def one_test(c_src, args = {})
     unless system("clang -I/usr/local/include/smack #{c_src} -c -emit-llvm -o a.o")
     
 
-  abort "SMACK problems..." unless system("smack a.o -mem-mod-dbg") 
+  abort "SMACK problems..." unless system("smack a.o")
     
   system("rm a.o")
   system("cat #{File.dirname(__FILE__)}/monitor.bpl >> a.bpl")
