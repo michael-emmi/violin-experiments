@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <smack.h>
+#include <violin.h>
 
 #define CAS(x,y,z) __atomic_compare_exchange_n(x,&(y),z,true,0,0)
 
@@ -169,43 +170,47 @@ void Init() {
 }
 
 void Push(int x) {
+  VIOLIN_PROC;
+  VIOLIN_OP;
+  VIOLIN_OP_START(add,x);
+  
 	struct ThreadInfo *ti = malloc(sizeof(struct ThreadInfo));
   ti->id = unique_id++;
 	ti->op = PUSH;
   ti->cell.pdata = x;
   ti->spin = 1;
 	StackOp(ti);
+  
+  VIOLIN_OP_FINISH(add,0);
+  VIOLIN_CHECK(stack);
 }
 
 int Pop() {
+  VIOLIN_PROC;
+  VIOLIN_OP;
+  VIOLIN_OP_START(remove,0);
+  
 	struct ThreadInfo *ti = malloc(sizeof(struct ThreadInfo));
   ti->id = unique_id++;
   ti->op = POP;
   ti->spin = 1;
 	StackOp(ti);
+  
+  VIOLIN_OP_FINISH(remove,ti->cell.pdata);
+  VIOLIN_CHECK(stack);
   return ti->cell.pdata;
 }
 
 int main() {
-  __SMACK_top_decl("axiom {:method \"Push\", \"add\"} true;");
-  __SMACK_top_decl("axiom {:method \"Pop\", \"remove\"} true;");
-
-  __SMACK_decl("var x: int;");
-
+  VIOLIN_PROC;
+  VIOLIN_INIT;
   Init();
 
+  __SMACK_decl("var x: int;");  
   __SMACK_code("call {:async} @(@);", Push, 1);
   __SMACK_code("call {:async} @(@);", Push, 2);
   __SMACK_code("call {:async} x := @();", Pop);
   __SMACK_code("call {:async} x := @();", Pop);
-  
-  __SMACK_code("assume {:yield} true;");
-  // __SMACK_code("assert {:spec \"no_thinair\"} true;");
-  // __SMACK_code("assert {:spec \"unique_removes\"} true;");
-  // __SMACK_code("assert {:spec \"no_false_empty\"} true;");
-  // __SMACK_code("assert {:spec \"stack_order\"} true;");
-  __SMACK_code("assert {:spec \"queue_order\"} true;");
 
   return 0;
 }
-

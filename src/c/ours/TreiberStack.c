@@ -37,6 +37,7 @@ void push (int v) {
   } while (!cas(&s,t,x));
     
   VIOLIN_OP_FINISH(add,0);
+  VIOLIN_CHECK(stack);
 }
 
 int pop () {
@@ -56,6 +57,7 @@ int pop () {
   } while (!cas(&s,t,x));
   
   VIOLIN_OP_FINISH(remove,t->data);
+  VIOLIN_CHECK(stack);
   return t->data;
 }
 
@@ -68,11 +70,7 @@ int main() {
   __SMACK_code("call {:async} @(@);", push, 1);
   __SMACK_code("call {:async} @(@);", push, 2);
   __SMACK_code("call {:async} x := @();", pop);
-  __SMACK_code("call {:async} x := @();", pop);
-
-  __SMACK_code("assume {:yield} true;");
-  
-  VIOLIN_CHECK(queue);
+  __SMACK_code("call {:async} x := @();", pop);  
 
   return 0;
 }

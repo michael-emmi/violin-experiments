@@ -1,18 +1,22 @@
 #!/usr/bin/env ruby
 
 def one_test(c_src, args = {})
-  puts "Looking for bugs in #{c_src} ..."
-  puts "-" * 80
+  begin
+    puts "Looking for bugs in #{c_src} ..."
+    puts "-" * 80
 
-  abort "compilation problems..." \
-    unless system("clang -I/usr/local/include/smack -I./include #{c_src} -c -emit-llvm -o a.o")
+    abort "compilation problems..." \
+      unless system("clang -I/usr/local/include/smack -I./include #{c_src} -c -emit-llvm -o a.o")
 
-  v = args[:verifier] || :boogie_fi
-  d = args[:delays] || 0
-  u = args[:unroll] || 1
-  system("c2s a.o -i -p -u #{u} -d #{d} --verifier #{v}")
-  File.unlink 'a.o'
-  puts "-" * 80
+    v = args[:verifier] || :boogie_fi
+    d = args[:delays] || 0
+    u = args[:unroll] || 1
+    system("c2s a.o -i -u #{u} -d #{d} --verifier #{v}")
+    puts "-" * 80
+
+  ensure
+    File.unlink('a.o') if File.exists?('a.o')
+  end
 end
 
 puts "=" * 80
