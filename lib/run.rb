@@ -8,10 +8,7 @@ def one_test(c_src, args = {})
     abort "compilation problems..." \
       unless system("clang -I/usr/local/include/smack -I./include #{c_src} -c -emit-llvm -o a.o")
 
-    v = args[:verifier] || :boogie_fi
-    d = args[:delays] || 0
-    u = args[:unroll] || 1
-    system("c2s a.o -i -u #{u} -d #{d} --verifier #{v}")
+    system("c2s a.o #{ARGV * " "}")
     puts "-" * 80
 
   ensure
@@ -19,10 +16,12 @@ def one_test(c_src, args = {})
   end
 end
 
+ARGV << "--verifier boogie_fi" if ARGV.grep(/--verifier/).empty?
+
 puts "=" * 80
 puts "Running CDS Experiments ..."
 puts "=" * 80
 
-one_test 'src/c/ours/TreiberStack.c', delays: 3, unroll: 3
-one_test 'src/c/ours/TreiberStack-bugged.c', delays: 3, unroll: 3
-one_test 'src/c/ours/EliminationStack.c', delays: 3, unroll: 3
+one_test 'src/c/ours/TreiberStack.c'
+one_test 'src/c/ours/TreiberStack-bugged.c'
+one_test 'src/c/ours/EliminationStack.c'
