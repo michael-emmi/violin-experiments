@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <smack.h>
+#include <violin.h>
 
 struct cell {
     int data;
@@ -22,51 +23,56 @@ bool cas(struct cell **p, struct cell* t, struct cell *x) {
 
 
 void push (int v) {
-    struct cell *t;
-    struct cell *x = malloc(sizeof *x);
-    x->data = v;
+  VIOLIN_PROC;
+  VIOLIN_OP;
+  VIOLIN_OP_START(add,v);
+
+  struct cell *t;
+  struct cell *x = malloc(sizeof *x);
+  x->data = v;
+  
+  do {
+      t = s;
+      x->next = t;
+  } while (!cas(&s,t,x));
     
-    do {
-        __SMACK_code("assume {:yield} true;");
-        t = s;
-        x->next = t;
-    } while (!cas(&s,t,x));
+  VIOLIN_OP_FINISH(add,0);
 }
 
 int pop () {
-    struct cell *t;
-    struct cell *x = malloc(sizeof *x);
-    do {
-        __SMACK_code("assume {:yield} true;");
-        t = s;
-        if(t == 0) {
-            return -1;
-        }
-        x = t->next;
-    } while (!cas(&s,t,x));
-    return t->data;
+  VIOLIN_PROC;
+  VIOLIN_OP;
+  VIOLIN_OP_START(remove,0);
+
+  struct cell *t;
+  struct cell *x = malloc(sizeof *x);
+  do {
+      __SMACK_code("assume {:yield} true;");
+      t = s;
+      if(t == 0) {
+          return -1;
+      }
+      x = t->next;
+  } while (!cas(&s,t,x));
+  
+  VIOLIN_OP_FINISH(remove,t->data);
+  return t->data;
 }
 
-
 int main() {
-  __SMACK_top_decl("axiom {:method \"add\", \"push\"} true;");
-  __SMACK_top_decl("axiom {:method \"remove\", \"pop\"} true;");
-
-  __SMACK_decl("var x: int;");
-  
+  VIOLIN_PROC;
+  VIOLIN_INIT;
   initialize();
 
+  __SMACK_decl("var x: int;");  
   __SMACK_code("call {:async} @(@);", push, 1);
+  __SMACK_code("call {:async} @(@);", push, 2);
   __SMACK_code("call {:async} x := @();", pop);
   __SMACK_code("call {:async} x := @();", pop);
 
   __SMACK_code("assume {:yield} true;");
   
-  // __SMACK_code("assert {:spec \"no_thinair\"} true;");
-  // __SMACK_code("assert {:spec \"unique_removes\"} true;");
-  // __SMACK_code("assert {:spec \"no_false_empty\"} true;");
-  // __SMACK_code("assert {:spec \"bag_spec\"} true;");
-  __SMACK_code("assert {:spec \"stack_spec\"} true;");
+  VIOLIN_CHECK(queue);
 
   return 0;
 }

@@ -31,8 +31,8 @@ function uniq4(o1,o2,o3,o4: op) returns (bool) {
   o1 != o2 && o1 != o3 && o1 != o4 && o2 != o3 && o2 != o4 && o3 != o4
 }
 
-var N: op;
-var C: [op] bool;
+var {:monitor_vars} N: op;
+var {:monitor_vars} C: [op] bool;
 // invariant (forall o: op :: C[o] ==> 0 <= o && o < N);
 // i.e. (forall o: op :: completed(o,C) ==> started(o,N))
 
@@ -121,8 +121,8 @@ returns (bool) {
   bag_spec(N,C,A,W) && queue_order(N,C)
 }
 
-var A, R: [val] bool;
-var W: [op] bool;
+var {:monitor_vars} A, R: [val] bool;
+var {:monitor_vars} W: [op] bool;
 
 function sees_empty(A: [val] bool, R: [val] bool) returns (bool) {
   (forall v: val :: A[v] ==> R[v])
@@ -133,7 +133,7 @@ modifies W;
 ensures sees_empty(A,R) ==> (forall o: op :: active(o,N,C) ==> W[o]);
 ensures sees_empty(A,R) ==> (forall o: op :: !active(o,N,C) ==> W[o] == old(W[o]));
 
-procedure {:init} init()
+procedure {:monitor_init} init()
 modifies N, C;
 {
   call op.init();

@@ -187,8 +187,8 @@ int Pop() {
 }
 
 int main() {
-  __SMACK_top_decl("axiom {:method \"add\", \"Push\"} true;");
-  __SMACK_top_decl("axiom {:method \"remove\", \"Pop\"} true;");
+  __SMACK_top_decl("axiom {:method \"Push\", \"add\"} true;");
+  __SMACK_top_decl("axiom {:method \"Pop\", \"remove\"} true;");
 
   __SMACK_decl("var x: int;");
 
@@ -203,7 +203,8 @@ int main() {
   // __SMACK_code("assert {:spec \"no_thinair\"} true;");
   // __SMACK_code("assert {:spec \"unique_removes\"} true;");
   // __SMACK_code("assert {:spec \"no_false_empty\"} true;");
-  __SMACK_code("assert {:spec \"stack_order\"} true;");
+  // __SMACK_code("assert {:spec \"stack_order\"} true;");
+  __SMACK_code("assert {:spec \"queue_order\"} true;");
 
   return 0;
 }
