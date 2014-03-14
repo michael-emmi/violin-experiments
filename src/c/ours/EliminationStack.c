@@ -204,6 +204,7 @@ int main() {
   VIOLIN_INIT;
   Init();
 
+  // __SMACK_top_decl("axiom {:static_threads} true;");
   __SMACK_decl("var x: int;");  
   __SMACK_code("call {:async} @(@);", Push, 1);
   __SMACK_code("call {:async} @(@);", Push, 2);
