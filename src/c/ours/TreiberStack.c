@@ -36,7 +36,7 @@ void push (int v) {
       t = s;
       x->next = t;
   } while (!cas(&s,t,x));
-    
+
   VIOLIN_OP_FINISH(add,0);
 }
 
@@ -51,6 +51,7 @@ int pop () {
       __SMACK_code("assume {:yield} true;");
       t = s;
       if(t == 0) {
+          VIOLIN_OP_FINISH(remove,-1);
           return -1;
       }
       x = t->next;
