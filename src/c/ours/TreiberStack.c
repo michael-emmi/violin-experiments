@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <smack.h>
+#define VIOLIN_BARRIERS 0
 #include <violin.h>
 
 struct cell {
