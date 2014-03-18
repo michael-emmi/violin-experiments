@@ -110,6 +110,8 @@ void violin_decls() {
     "  assume (forall t0, tf: int, v: val :: violin.remove.done[v][t0][tf] == 0);"
     "}");
 
+  D("// TODO violin.tick() must be called somewhere...");
+
   D("procedure violin.tick()"
     "modifies violin.time, violin.ret;"
     "{"
