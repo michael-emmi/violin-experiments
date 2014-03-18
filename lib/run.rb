@@ -4,9 +4,13 @@ def one_test(c_src, args = {})
   begin
     puts "Looking for bugs in #{c_src} ..."
     puts "-" * 80
-
-    abort "compilation problems..." \
-      unless system("clang -I/usr/local/include/smack -I./include #{c_src} -c -emit-llvm -o a.o")
+    
+    frontend = "clang -I/usr/local/include/smack -I./include #{c_src} -c -emit-llvm -o a.o"
+    frontend += " -DVIOLIN_COUNTING=0" if $counting
+    
+    puts frontend if $verbose
+    
+    abort "compilation problems..." unless system(frontend)
 
     system("~/Code/c2s/lib/c2s.rb a.o #{ARGV * " "}")
     puts "-" * 80
@@ -16,7 +20,11 @@ def one_test(c_src, args = {})
   end
 end
 
+$verbose = !ARGV.grep(/^(-v|--verbose)$/).empty?
+$counting = !ARGV.grep(/--counting/).empty?
+ARGV.reject!{|arg| arg =~ /--counting/}
 ARGV << "--verifier boogie_fi" if ARGV.grep(/--verifier/).empty?
+
 
 puts "=" * 80
 puts "Running CDS Experiments ..."
