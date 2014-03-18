@@ -1,5 +1,5 @@
-#ifdef VIOLIN_BARRIERS
-#include <violin-barriers.h>
+#ifdef VIOLIN_COUNTING
+#include <violin-counting.h>
 #else
-#include <violin-po.h>
+#include <violin-partial-orders.h>
 #endif

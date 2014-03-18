@@ -19,10 +19,10 @@
   __SMACK_decl("var $t0: int;")
     
 #define VIOLIN_OP_START(op,val) \
-  __SMACK_code("call $t0 := " #op ".start(@);", val)
+  __SMACK_code("call $t0 := violin." #op ".start(@);", val)
 
 #define VIOLIN_OP_FINISH(op,val) \
-  __SMACK_code("call " #op ".finish($t0,@);", val)
+  __SMACK_code("call violin." #op ".finish($t0,@);", val)
     
 void violin_decls() {
 
@@ -76,25 +76,25 @@ void violin_decls() {
     "  return;"
     "}");
 
-#if VIOLIN_BARRIERS == 0
-  D("function XXX_spec(A.o: [val][int] int, A.d: [val][int] int,"
-    "             R.o: [val][int] int, R.d: [val][int] int)"
+#if VIOLIN_COUNTING == 0
+  D("function XXX_spec(A.o: [val][int] int, A.d: [val][int][int] int,"
+    "             R.o: [val][int] int, R.d: [val][int][int] int)"
     "returns (bool) {"
     "  R.d[1][0][0] <= A.o[1][0] + A.d[1][0][0]"
     "  && R.d[0][0][0] <= A.o[0][0] + A.d[0][0][0]"
     "}");
 #else
-#error invalid value for VIOLIN_BARRIERS / expected 0
+#error invalid value for VIOLIN_COUNTING / expected 0
 #endif
   
-  D("function stack_spec(A.o: [val][int] int, A.d: [val][int] int,"
-    "             R.o: [val][int] int, R.d: [val][int] int)"
+  D("function stack_spec(A.o: [val][int] int, A.d: [val][int][int] int,"
+    "             R.o: [val][int] int, R.d: [val][int][int] int)"
     "returns (bool) {"
     "  XXX_spec(A.o,A.d,R.o,R.d)"
     "}");
 
-  D("function queue_spec(A.o: [val][int] int, A.d: [val][int] int,"
-    "             R.o: [val][int] int, R.d: [val][int] int)"
+  D("function queue_spec(A.o: [val][int] int, A.d: [val][int][int] int,"
+    "             R.o: [val][int] int, R.d: [val][int][int] int)"
     "returns (bool) {"
     "  XXX_spec(A.o,A.d,R.o,R.d)"
     "}");
