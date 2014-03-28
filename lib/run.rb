@@ -7,19 +7,20 @@ def one_test(c_src, args = {})
     
     frontend = "clang -I/usr/local/include/smack -I./include #{c_src} -c -emit-llvm -o a.o"
     frontend += " -DVIOLIN_COUNTING=0" if $counting
+    c2s = "~/Code/c2s/lib/c2s.rb a.o #{ARGV * " "}"
     
     puts frontend if $verbose
-    
     abort "compilation problems..." unless system(frontend)
-
-    system("~/Code/c2s/lib/c2s.rb a.o #{ARGV * " "}")
+    puts c2s if $verbose
+    abort "c2s failed..." unless system(c2s)
     puts "-" * 80
 
   ensure
-    # File.unlink('a.o') if File.exists?('a.o')
+    File.unlink('a.o') if File.exists?('a.o') unless $keep
   end
 end
 
+$keep = !ARGV.grep(/^(-k|--keep)$/).empty?
 $verbose = !ARGV.grep(/^(-v|--verbose)$/).empty?
 $counting = !ARGV.grep(/--counting/).empty?
 ARGV.reject!{|arg| arg =~ /--counting/}
@@ -33,3 +34,5 @@ puts "=" * 80
 one_test 'src/c/ours/TreiberStack.c'
 one_test 'src/c/ours/TreiberStack-bugged.c'
 one_test 'src/c/ours/EliminationStack.c'
+
+# one_test 'src/c/ours/BasketsQueue.c'

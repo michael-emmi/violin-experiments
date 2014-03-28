@@ -1,9 +1,7 @@
-#include<stdio.h>
-#include<stdlib.h>
-
-typedef int bool;
-#define true 1
-#define false 0
+#include <stdio.h>
+#include <stdlib.h>
+#include <smack.h>
+#include <violin.h>
 
 struct node_t;
 
@@ -96,6 +94,10 @@ bool equalNodes(struct node_t n1, struct node_t n2) {
 }
 
 void enqueue(int val) {
+  VIOLIN_PROC;
+  VIOLIN_OP;
+  VIOLIN_OP_START(add,v);
+
     struct node_t *nd = malloc(sizeof *nd);
     nd->value = val;
     while (true) {
@@ -107,6 +109,7 @@ void enqueue(int val) {
                 struct pointer_t pt = *createPt(nd,0,tl.tag+1);
                 if (cas(&(tail.ptr->next), next, pt)) {
                     cas(&tail, tl, pt);
+                    VIOLIN_OP_FINISH(add,0);
                     return ;
                 }
                 next = tail.ptr->next;
@@ -114,6 +117,7 @@ void enqueue(int val) {
                     backoff_scheme();
                     nd->next = next;
                     if (cas(&tail.ptr->next, next, pt)) {
+                        VIOLIN_OP_FINISH(add,0);
                         return ;
                     }
                     next = tail.ptr->next;
@@ -135,6 +139,10 @@ void free_chain(struct pointer_t head, struct pointer_t next) {
 }
 
 int dequeue() {
+  VIOLIN_PROC;
+  VIOLIN_OP;
+  VIOLIN_OP_START(remove,0);
+
     while (true) {
         struct pointer_t hd = head;
         struct pointer_t tl = tail;
@@ -142,6 +150,7 @@ int dequeue() {
         if (equalPointers(hd,head)) {
             if (equalNodes(*head.ptr,*tail.ptr)) {
                 if (next.ptr == 0) {
+                    VIOLIN_OP_FINISH(remove,-1);
                     return -1;
                 }
                 while (next.ptr->next.ptr != 0 && equalPointers(tail,tl)) {
@@ -168,6 +177,7 @@ int dequeue() {
                     if (cas(&iter.ptr->next, next, *createPt(next.ptr, 1, next.tag+1))) {
                         if (hops >= MAX_HOPS)
                             free_chain(head, next);
+                        VIOLIN_OP_FINISH(remove,value);
                         return value;
                     }
                     backoff_scheme();
@@ -177,13 +187,18 @@ int dequeue() {
     }
 }
 
-
 int main() {
-    initialize();
-//     printQueue();
-    enqueue(3);
-//     printQueue();
-    printf("dequeued: %i\n",dequeue());
-//     printQueue();
-    printf("dequeued: %i\n",dequeue());
+  VIOLIN_PROC;
+  VIOLIN_INIT;
+  initialize();
+
+  // __SMACK_top_decl("axiom {:static_threads} true;");
+  __SMACK_decl("var x: int;");
+  __SMACK_code("call {:async} @(@);", enqueue, 1);
+  __SMACK_code("call {:async} x := @();", dequeue);
+  __SMACK_code("call {:async} x := @();", dequeue);
+
+  __SMACK_code("assume {:yield} true;");
+  VIOLIN_CHECK(queue);
+  return 0;
 }

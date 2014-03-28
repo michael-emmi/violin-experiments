@@ -10,7 +10,7 @@
 
 #define CAS(x,y,z) __atomic_compare_exchange_n(x,&(y),z,true,0,0)
 
-#define N 100
+#define N 10
 
 enum stack_op { POP = 0, PUSH };
 
@@ -65,15 +65,14 @@ void LesOP(struct ThreadInfo *p) {
     int pos = GetPosition(p); // CONSTANTIN: pos = random() % MAX_THREADS
 		int him = collision[pos];
 
-    // __SMACK_code("assume {:yield} true;");
 		while (!CAS(&collision[pos],him,mypid))
 			him = collision[pos];
 
-		if (location[him]->cell.pdata != EMPTY.pdata) {
+		if (location[him] && location[him]->cell.pdata != EMPTY.pdata) {
 			struct ThreadInfo* q = location[him];
 
 			if(q != NULL && q->id == him && q->op != p->op) {
-        // __SMACK_code("assume {:yield} true;");
+
 				if (CAS(&location[mypid],p,NULL)) {
 					if (TryCollision(p,q,him) == true)
 						return;
@@ -93,11 +92,11 @@ void LesOP(struct ThreadInfo *p) {
 			FinishCollision(p);
 			return;
 		}
-
+  } // The wrong place!
 stack:
 		if (TryPerformStackOp(p) == true)
 			return;
-	}
+  // } // The right place
 }
 
 bool TryPerformStackOp(struct ThreadInfo* p) {
@@ -106,7 +105,9 @@ bool TryPerformStackOp(struct ThreadInfo* p) {
 	if (p->op==PUSH) {
 		phead = S.ptop;
 		p->cell.pnext = phead;
-    // __SMACK_code("assume {:yield} true;");
+
+    __SMACK_code("assume {:yield} true;");
+
 		if(CAS(&S.ptop,phead,&p->cell))
 			return true;
 		else
@@ -120,7 +121,8 @@ bool TryPerformStackOp(struct ThreadInfo* p) {
 		}
 		pnext = phead->pnext;
 
-    // __SMACK_code("assume {:yield} true;");
+    __SMACK_code("assume {:yield} true;");
+
 		if (CAS(&S.ptop,phead,pnext)) {
 			p->cell = *phead;
 			return true;
@@ -146,14 +148,18 @@ bool TryCollision(struct ThreadInfo *p, struct ThreadInfo *q, int him) {
   int mypid = p->id;
 
 	if (p->op == PUSH) {
+
     // __SMACK_code("assume {:yield} true;");
+
 		if (CAS(&location[him],q,p))
 			return true;
 		else
 			return false;
 	}
 	if(p->op == POP) {
-    // __SMACK_code("assume {:yield} true;");
+
+    __SMACK_code("assume {:yield} true;");
+
 		if(CAS(&location[him],q,NULL)){
 			p->cell=q->cell;
 			location[mypid]=NULL;
@@ -166,10 +172,14 @@ bool TryCollision(struct ThreadInfo *p, struct ThreadInfo *q, int him) {
 }
 
 void Init() {
-  // TODO the collision array should be initial clear
+  // TODO the location array should be initial clear
+
 }
 
 void Push(int x) {
+
+  __SMACK_code("assume {:yield} true;");
+
   VIOLIN_PROC;
   VIOLIN_OP;
   VIOLIN_OP_START(add,x);
@@ -185,6 +195,9 @@ void Push(int x) {
 }
 
 int Pop() {
+
+  // __SMACK_code("assume {:yield} true;");
+
   VIOLIN_PROC;
   VIOLIN_OP;
   VIOLIN_OP_START(remove,0);
@@ -205,13 +218,15 @@ int main() {
   Init();
 
   // __SMACK_top_decl("axiom {:static_threads} true;");
-  __SMACK_decl("var x: int;");  
-  __SMACK_code("call {:async} @(@);", Push, 1);
-  __SMACK_code("call {:async} @(@);", Push, 2);
-  __SMACK_code("call {:async} x := @();", Pop);
-  __SMACK_code("call {:async} x := @();", Pop);
+  __SMACK_decl("var x: int;");
+  __SMACK_code("call {:async} @(@);", Push, 1); // Dx0 -> 0
+  __SMACK_code("call {:async} @(@);", Push, 2); // Dx1 -> 1
+  __SMACK_code("call {:async} @(@);", Push, 3); // Dx1 -> 2
+  __SMACK_code("call {:async} @(@);", Push, 4); // Dx1 -> 0,1
+  __SMACK_code("call {:async} x := @();", Pop); // Dx1 -> 0,1
+  __SMACK_code("call {:async} x := @();", Pop); // Dx2 -> 0,1,2
 
-  __SMACK_code("assume {:yield} true;");
+  __SMACK_code("assume {:yield} true;");        // Dx1 -> 2
   VIOLIN_CHECK(stack);
   return 0;
 }
