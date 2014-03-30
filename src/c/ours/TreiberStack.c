@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <smack.h>
 #include <violin.h>
+#include <c2s.h>
 
 struct cell {
     int data;
@@ -33,6 +34,7 @@ void push (int v) {
   
   do {
       __SMACK_code("assume {:yield} true;");
+      BOOKMARK("Y");
       t = s;
       x->next = t;
   } while (!cas(&s,t,x));
@@ -49,6 +51,7 @@ int pop () {
   struct cell *x = malloc(sizeof *x);
   do {
       __SMACK_code("assume {:yield} true;");
+      BOOKMARK("Y");
       t = s;
       if(t == 0) {
           VIOLIN_OP_FINISH(remove,-1);
@@ -68,12 +71,17 @@ int main() {
 
   // __SMACK_top_decl("axiom {:static_threads} true;");
   __SMACK_decl("var x: int;");
-  __SMACK_code("call {:async} @(@);", push, 1);
-  __SMACK_code("call {:async} @(@);", push, 2);
-  __SMACK_code("call {:async} x := @();", pop);
-  __SMACK_code("call {:async} x := @();", pop);
+  __SMACK_decl("var t1, t2, t3, t4: int;");
+  __SMACK_code("call {:async t1} @(@);", push, 1);
+  __SMACK_code("call {:async t2} @(@);", push, 2);
+  __SMACK_code("call {:async t3} x := @();", pop);
+  __SMACK_code("call {:async t4} x := @();", pop);
 
   __SMACK_code("assume {:yield} true;");
+
+  BOOKMARK("here");  
+  ROUND(0,"here",1,2);
+
   VIOLIN_CHECK(stack);
   return 0;
 }

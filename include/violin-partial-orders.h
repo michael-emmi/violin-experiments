@@ -37,7 +37,8 @@ void violin_decls() {
 
   D("function m(op) returns (method);");
   D("function v(op) returns (val);");
-  D("function T(op) returns (bool);");
+  D("function O(op) returns (bool);");
+  D("function V(op) returns (bool);");
 
   D("function started(o: op, N: int) returns (bool) { 0 <= o && o < N }");
   D("function completed(o: op, N: int, C: [op] bool) returns (bool) { started(o,N) && C[o] }");
@@ -51,9 +52,9 @@ void violin_decls() {
 
   // ALTERNATE VERSION WITH MONOMORPHIC PARTIAL ORDER ...
   D("function $po(i,j: int) returns (bool);");
-  D("axiom (forall i: int :: $po(i,i));");
-  D("axiom (forall i, j: int :: $po(i,j) && $po(j,i) ==> i == j);");
-  D("axiom (forall i, j, k: int :: $po(i,j) && $po(j,k) ==> $po(i,k));");
+  D("axiom (forall i: int :: {O(i)} $po(i,i));");
+  D("axiom (forall i, j: int :: {O(i), O(j)} $po(i,j) && $po(j,i) ==> i == j);");
+  D("axiom (forall i, j, k: int :: {O(i), O(j), O(k)} $po(i,j) && $po(j,k) ==> $po(i,k));");
   D("function bef(o1, o2: op) returns (bool) { $po(o1,o2) }");
   D("function bef?(o1, o2: op) returns (bool) { !$po(o2,o1) }");
 
@@ -69,7 +70,7 @@ void violin_decls() {
   D("procedure op.init()"
     "modifies N, C;"
     "{"
-    "  assume (forall o: op :: {T(o)} !C[o]);"
+    "  assume (forall o: op :: {O(o)} !C[o]);"
     "  N := 0;"
     "}");
 
@@ -77,9 +78,9 @@ void violin_decls() {
     "modifies N;"
     "{"
     "  o := N;"
-    "  assume T(o);"
-    "  assume (forall oo: op :: {T(oo)} completed(oo,N,C) ==> bef(oo,o));"
-    "  assume (forall oo: op :: {T(oo)} active(oo,N,C) ==> !bef(o,oo) && !bef(oo,o));"
+    "  assume O(o);"
+    "  assume (forall oo: op :: {O(oo)} completed(oo,N,C) ==> bef(oo,o));"
+    "  assume (forall oo: op :: {O(oo)} active(oo,N,C) ==> !bef(o,oo) && !bef(oo,o));"
     "  N := N + 1;"
     "}");
 
@@ -104,19 +105,19 @@ void violin_decls() {
     "}");
 
   D("function no_thinair(N: int, C: [op] bool, A: [int] bool) returns (bool) {"
-    "  (forall o: op :: {T(o)} completed(o,N,C) && m(o) == remove ==> "
+    "  (forall o: op :: {O(o)} completed(o,N,C) && m(o) == remove ==> "
     "    A[v(o)] || v(o) == empty"
     "  )"
     "}");
 
   D("function unique_removes(N: int, C: [op] bool) returns (bool) {"
-    "  (forall o1, o2: op :: {T(o1), T(o2)} completed(o1,N,C) && completed(o2,N,C) && o1 != o2 ==>  "
+    "  (forall o1, o2: op :: {O(o1), O(o2)} completed(o1,N,C) && completed(o2,N,C) && o1 != o2 ==>  "
     "    m(o1) != m(o2) || v(o1) != v(o2) || v(o1) == empty || v(o2) == empty"
     "  )"
     "}");
 
   D("function no_false_empty(N: int, C: [op] bool, W: [op] bool) returns (bool) {"
-    "  (forall o: op :: {T(o)} completed(o,N,C) && m(o) == remove && v(o) == empty ==> W[o])"
+    "  (forall o: op :: {O(o)} completed(o,N,C) && m(o) == remove && v(o) == empty ==> W[o])"
     "}");
 
   D("function bag_spec(N: int, C: [op] bool, A: [val] bool, W: [op] bool) "
@@ -125,7 +126,7 @@ void violin_decls() {
     "}");
 
   D("function stack_order(N: int, C: [op] bool) returns (bool) {"
-    "  (forall o1, o2, o1', o2': op :: {T(o1), T(o2), T(o1'), T(o2')} "
+    "  (forall o1, o2, o1', o2': op :: {O(o1), O(o2), O(o1'), O(o2')} "
     "    started(o1,N) && started(o2,N) && completed(o1',N,C) && completed(o2',N,C)"
     "    && uniq4(o1,o2,o1',o2') "
     "    && match(o1,o1') && match(o2,o2')"
@@ -134,7 +135,7 @@ void violin_decls() {
     "}");
 
   D("function queue_order(N: int, C: [op] bool) returns (bool) {"
-    "  (forall o1, o2, o1', o2': op :: {T(o1), T(o2), T(o1'), T(o2')} "
+    "  (forall o1, o2, o1', o2': op :: {O(o1), O(o2), O(o1'), O(o2')} "
     "    started(o1,N) && started(o2,N) && completed(o1',N,C) && completed(o2',N,C)"
     "    && uniq4(o1,o2,o1',o2')"
     "    && match(o1,o1') && match (o2,o2')"
@@ -156,21 +157,21 @@ void violin_decls() {
   D("var W: [op] bool;");
 
   D("function sees_empty(A: [val] bool, R: [val] bool) returns (bool) {"
-    "  (forall v: val :: A[v] ==> R[v])"
+    "  (forall v: val :: {V(v)} A[v] ==> R[v])"
     "}");
 
   D("procedure see_empty();"
     "modifies W;"
-    "ensures sees_empty(A,R) ==> (forall o: op :: {T(o)} active(o,N,C) ==> W[o]);"
-    "ensures sees_empty(A,R) ==> (forall o: op :: {T(o)} !active(o,N,C) ==> W[o] == old(W[o]));");
+    "ensures sees_empty(A,R) ==> (forall o: op :: {O(o)} active(o,N,C) ==> W[o]);"
+    "ensures sees_empty(A,R) ==> (forall o: op :: {O(o)} !active(o,N,C) ==> W[o] == old(W[o]));");
 
   D("procedure violin.init()"
     "modifies N, C;"
     "{"
     "  call op.init();"
-    "  assume (forall v: val :: !A[v]);"
-    "  assume (forall v: val :: !R[v]);"
-    "  assume (forall o: op :: {T(o)} !W[o]);"
+    "  assume (forall v: val :: {V(v)} !A[v]);"
+    "  assume (forall v: val :: {V(v)} !R[v]);"
+    "  assume (forall o: op :: {O(o)} !W[o]);"
     "}");
 
   D("procedure add.start(v: val) returns (o: op)"
@@ -179,6 +180,7 @@ void violin_decls() {
     "  call o := op.start();"
     "  assume m(o) == add;"
     "  assume v(o) == v;"
+    "  assume V(v);"
     "  return;"
     "}");
 
@@ -211,6 +213,7 @@ void violin_decls() {
     "modifies C;"
     "{"
     "  assume v(o) == v;"
+    "  assume V(v);"
     "  call op.finish(o);"
     "  return;"
     "}");
