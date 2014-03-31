@@ -169,8 +169,8 @@ void violin_decls() {
     "modifies N, C;"
     "{"
     "  call op.init();"
-    "  assume (forall v: val :: {V(v)} !A[v]);"
-    "  assume (forall v: val :: {V(v)} !R[v]);"
+    "  assume (forall v: val :: !A[v]);"
+    "  assume (forall v: val :: !R[v]);"
     "  assume (forall o: op :: {O(o)} !W[o]);"
     "}");
 
@@ -213,7 +213,7 @@ void violin_decls() {
     "modifies C;"
     "{"
     "  assume v(o) == v;"
-    "  assume V(v);"
+    "  assume v != empty ==> V(v);"
     "  call op.finish(o);"
     "  return;"
     "}");

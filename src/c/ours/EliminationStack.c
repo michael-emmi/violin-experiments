@@ -9,7 +9,19 @@
 #include <violin.h>
 #include <c2s.h>
 
-#define CAS(x,y,z) __atomic_compare_exchange_n(x,&(y),z,true,0,0)
+// XXX this translates to LLVM's cmpxchg instruction, but is really
+// broken in SMACK.
+// #define CAS(x,y,z) __atomic_compare_exchange_n(x,&(y),z,true,0,0)
+  
+#define CASDEF(t,ty) \
+  bool t ## _cas(ty *p, ty cmp, ty new) { \
+    if (*p == cmp) { \
+      *p = new; \
+      return true; \
+    } \
+    return false; \
+  }
+#define CAS(t,x,y,z) t ## _cas(x,y,z)
 
 #define LOCATION_ARRAY_SIZE 7
 #define COLLISION_ARRAY_SIZE 2
@@ -45,6 +57,10 @@ bool TryPerformStackOp(struct ThreadInfo *p);
 void FinishCollision(struct ThreadInfo *p);
 bool TryCollision(struct ThreadInfo *p, struct ThreadInfo *q, int him);
 
+CASDEF(int,int)
+CASDEF(ti,struct ThreadInfo*)
+CASDEF(c,struct Cell*)
+
 int GetPosition(struct ThreadInfo *p) {
   int pos;
   pos = __SMACK_nondet();
@@ -67,7 +83,7 @@ void LesOP(struct ThreadInfo *p) {
     int pos = GetPosition(p); // CONSTANTIN: pos = random() % MAX_THREADS
 		int him = collision[pos];
 
-		while (!CAS(&collision[pos],him,mypid))
+		while (!CAS(int,&collision[pos],him,mypid))
 			him = collision[pos];
 
 		if (location[him] && location[him]->cell.pdata != EMPTY.pdata) {
@@ -75,7 +91,7 @@ void LesOP(struct ThreadInfo *p) {
 
 			if(q != NULL && q->id == him && q->op != p->op) {
 
-				if (CAS(&location[mypid],p,NULL)) {
+				if (CAS(ti,&location[mypid],p,NULL)) {
 					if (TryCollision(p,q,him) == true)
 						return;
 					else
@@ -90,7 +106,7 @@ void LesOP(struct ThreadInfo *p) {
 		delay(p->spin); // CONSTANTIN: sleep(p->spin)
 
     // __SMACK_code("assume {:yield} true;");
-		if (!CAS(&location[mypid],p,NULL)) {
+		if (!CAS(ti,&location[mypid],p,NULL)) {
 			FinishCollision(p);
 			return;
 		}
@@ -111,8 +127,7 @@ bool TryPerformStackOp(struct ThreadInfo* p) {
     __SMACK_code("assume {:yield} true;");
     BOOKMARK("stack");
 
-		if(CAS(&S.ptop,phead,&p->cell)) {
-      __SMACK_assert(S.ptop->pdata == p->cell.pdata);
+		if(CAS(c,&S.ptop,phead,&p->cell)) {
 			return true;
 		} else
 			return false;
@@ -129,7 +144,7 @@ bool TryPerformStackOp(struct ThreadInfo* p) {
     __SMACK_code("assume {:yield} true;");
     BOOKMARK("stack");
 
-		if (CAS(&S.ptop,phead,pnext)) {
+		if (CAS(c,&S.ptop,phead,pnext)) {
 			// p->cell = *phead; // actual code, modified to avoid memcpy
       p->cell.pdata = phead->pdata;
 			return true;
@@ -158,10 +173,10 @@ bool TryCollision(struct ThreadInfo *p, struct ThreadInfo *q, int him) {
 
 	if (p->op == PUSH) {
 
-    // __SMACK_code("assume {:yield} true;");
+    __SMACK_code("assume {:yield} true;");
     BOOKMARK("collide");
 
-		if (CAS(&location[him],q,p))
+		if (CAS(ti,&location[him],q,p))
 			return true;
 		else
 			return false;
@@ -171,7 +186,7 @@ bool TryCollision(struct ThreadInfo *p, struct ThreadInfo *q, int him) {
     __SMACK_code("assume {:yield} true;");
     BOOKMARK("collide");
 
-		if(CAS(&location[him],q,NULL)){
+		if(CAS(ti,&location[him],q,NULL)){
 			// p->cell = q->cell; // actual code, modified to avoid memcpy
       p->cell.pdata = q->cell.pdata;
 
@@ -210,7 +225,7 @@ void Push(int x) {
 
 int Pop() {
 
-  // __SMACK_code("assume {:yield} true;");
+  __SMACK_code("assume {:yield} true;");
   BOOKMARK("start");
 
   VIOLIN_PROC;
@@ -235,17 +250,14 @@ int main() {
   // __SMACK_top_decl("axiom {:static_threads} true;");
   __SMACK_decl("var x: int;");
   __SMACK_decl("var t1, t2, t3, t4, t5, t6: int;");
-  // __SMACK_code("call {:async t1} @(@);", Push, 1); // Dx0 -> 0
-  // __SMACK_code("call {:async t2} @(@);", Push, 2); // Dx1 -> 1
-  // __SMACK_code("call {:async t3} @(@);", Push, 3); // Dx1 -> 2
-  // __SMACK_code("call {:async t4} @(@);", Push, 4); // Dx1 -> 0,1
-  // __SMACK_code("call {:async t5} x := @();", Pop); // Dx1 -> 0,1
-  // __SMACK_code("call {:async t6} x := @();", Pop); // Dx2 -> 0,1,2
-
-  Push(1);
-  Pop();
-
-  // __SMACK_code("assume {:yield} true;");        // Dx1 -> 2
+  __SMACK_code("call {:async t1} @(@);", Push, 1); // Dx0 -> 0
+  __SMACK_code("call {:async t2} @(@);", Push, 2); // Dx1 -> 1
+  __SMACK_code("call {:async t3} @(@);", Push, 3); // Dx1 -> 2
+  __SMACK_code("call {:async t4} @(@);", Push, 4); // Dx1 -> 0,1
+  __SMACK_code("call {:async t5} x := @();", Pop); // Dx1 -> 0,1
+  __SMACK_code("call {:async t6} x := @();", Pop); // Dx2 -> 0,1,2
+  
+  __SMACK_code("assume {:yield} true;");        // Dx1 -> 2
   BOOKMARK("here");
 
   // ROUND(t1,"start",1,0); ROUND(t1,"stack",1,0); ROUND(t1,"collide",1,0);
@@ -254,9 +266,8 @@ int main() {
   // ROUND(t4,"start",1,0); ROUND(t4,"stack",1,1); ROUND(t4,"collide",1,1);
   // ROUND(t5,"start",1,0); ROUND(t5,"stack",1,1); ROUND(t5,"collide",1,1);
   // ROUND(t6,"start",1,0); ROUND(t6,"stack",1,1); ROUND(t6,"collide",1,2);
-
   // ROUND(0,"here",1,2);
 
-  // VIOLIN_CHECK(stack);
+  VIOLIN_CHECK(stack);
   return 0;
 }
