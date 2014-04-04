@@ -23,6 +23,10 @@
 
 #define VIOLIN_OP_FINISH(op,val) \
   __SMACK_code("call violin." #op ".finish($t0,@);", val)
+
+#define VALUES(n) \
+  __SMACK_top_decl("const #VALUES: int;"); \
+  __SMACK_top_decl("axiom #VALUES == " #n ";")
     
 void violin_decls() {
 

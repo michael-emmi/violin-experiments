@@ -71,6 +71,8 @@ int main() {
   VIOLIN_INIT;
   initialize();
 
+  VALUES(2);
+
   // __SMACK_top_decl("axiom {:static_threads} true;");
   __SMACK_decl("var x: int;");
   __SMACK_decl("var t1, t2, t3, t4: int;");

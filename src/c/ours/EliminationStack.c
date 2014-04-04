@@ -105,7 +105,7 @@ void LesOP(struct ThreadInfo *p) {
 		}
 		delay(p->spin); // CONSTANTIN: sleep(p->spin)
 
-    // __SMACK_code("assume {:yield} true;");
+    __SMACK_code("assume {:yield} true;");
 		if (!CAS(ti,&location[mypid],p,NULL)) {
 			FinishCollision(p);
 			return;
@@ -247,17 +247,22 @@ int main() {
   VIOLIN_INIT;
   Init();
 
+  VALUES(4);
+
   // __SMACK_top_decl("axiom {:static_threads} true;");
+
   __SMACK_decl("var x: int;");
   __SMACK_decl("var t1, t2, t3, t4, t5, t6: int;");
+  // __SMACK_code("assume {:asyncbegin} true;");
   __SMACK_code("call {:async t1} @(@);", Push, 1); // Dx0 -> 0
   __SMACK_code("call {:async t2} @(@);", Push, 2); // Dx1 -> 1
   __SMACK_code("call {:async t3} @(@);", Push, 3); // Dx1 -> 2
   __SMACK_code("call {:async t4} @(@);", Push, 4); // Dx1 -> 0,1
   __SMACK_code("call {:async t5} x := @();", Pop); // Dx1 -> 0,1
   __SMACK_code("call {:async t6} x := @();", Pop); // Dx2 -> 0,1,2
+  // __SMACK_code("assume {:asyncend} true;");
   
-  __SMACK_code("assume {:yield} true;");        // Dx1 -> 2
+  __SMACK_code("assume {:yield} true;");        // Dx1 -> 3
   BOOKMARK("here");
 
   // ROUND(t1,"start",1,0); ROUND(t1,"stack",1,0); ROUND(t1,"collide",1,0);
@@ -267,6 +272,7 @@ int main() {
   // ROUND(t5,"start",1,0); ROUND(t5,"stack",1,1); ROUND(t5,"collide",1,1);
   // ROUND(t6,"start",1,0); ROUND(t6,"stack",1,1); ROUND(t6,"collide",1,2);
   // ROUND(0,"here",1,2);
+  // ROUND(t5,"start",1,1);
 
   VIOLIN_CHECK(stack);
   return 0;

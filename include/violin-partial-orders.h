@@ -6,13 +6,14 @@ void violin_decls();
   __SMACK_code("call violin.init();")
 
 #define VIOLIN_CHECK(s) \
-  __SMACK_code("assert " #s "_spec(N,C,A,W);")
+  __SMACK_code("assert " #s "_spec(N,C,Ai,W);")
     
 #define VIOLIN_PROC \
   __SMACK_mod("N"); \
   __SMACK_mod("C"); \
+  __SMACK_mod("Ai"); \
   __SMACK_mod("A"); \
-  __SMACK_mod("R"); \
+  __SMACK_mod("Ri"); \
   __SMACK_mod("W")
 
 #define VIOLIN_OP \
@@ -23,6 +24,10 @@ void violin_decls();
 
 #define VIOLIN_OP_FINISH(op,val) \
   __SMACK_code("call " #op ".finish($myop,@);", val)
+
+#define VALUES(n) \
+  __SMACK_top_decl("const #VALUES: int;"); \
+  __SMACK_top_decl("axiom #VALUES == " #n ";")
 
 
 void violin_decls() {
@@ -104,9 +109,9 @@ void violin_decls() {
     "  m(o1) == add && m(o2) == remove && v(o1) == v(o2) "
     "}");
 
-  D("function no_thinair(N: int, C: [op] bool, A: [int] bool) returns (bool) {"
+  D("function no_thinair(N: int, C: [op] bool, Ai: [int] bool) returns (bool) {"
     "  (forall o: op :: {O(o)} completed(o,N,C) && m(o) == remove ==> "
-    "    A[v(o)] || v(o) == empty"
+    "    Ai[v(o)] || v(o) == empty"
     "  )"
     "}");
 
@@ -120,9 +125,9 @@ void violin_decls() {
     "  (forall o: op :: {O(o)} completed(o,N,C) && m(o) == remove && v(o) == empty ==> W[o])"
     "}");
 
-  D("function bag_spec(N: int, C: [op] bool, A: [val] bool, W: [op] bool) "
+  D("function bag_spec(N: int, C: [op] bool, Ai: [val] bool, W: [op] bool) "
     "returns (bool) {"
-    "  no_thinair(N,C,A) && unique_removes(N,C) && no_false_empty(N,C,W)"
+    "  no_thinair(N,C,Ai) && unique_removes(N,C) && no_false_empty(N,C,W)"
     "}");
 
   D("function stack_order(N: int, C: [op] bool) returns (bool) {"
@@ -143,44 +148,51 @@ void violin_decls() {
     "  )"
     "}");
 
-  D("function stack_spec(N: int, C: [op] bool, A: [val] bool, W: [op] bool)"
+  D("function stack_spec(N: int, C: [op] bool, Ai: [val] bool, W: [op] bool)"
     "returns (bool) {"
-    "  bag_spec(N,C,A,W) && stack_order(N,C)"
+    "  bag_spec(N,C,Ai,W) && stack_order(N,C)"
     "}");
 
-  D("function queue_spec(N: int, C: [op] bool, A: [val] bool, W: [op] bool)"
+  D("function queue_spec(N: int, C: [op] bool, Ai: [val] bool, W: [op] bool)"
     "returns (bool) {"
-    "  bag_spec(N,C,A,W) && queue_order(N,C)"
+    "  bag_spec(N,C,Ai,W) && queue_order(N,C)"
     "}");
 
-  D("var A, R: [val] bool;");
+  D("var Ai, A, Ri: [val] bool;");
   D("var W: [op] bool;");
 
-  D("function sees_empty(A: [val] bool, R: [val] bool) returns (bool) {"
-    "  (forall v: val :: {V(v)} A[v] ==> R[v])"
+  D("function sees_empty(A: [val] bool, Ri: [val] bool) returns (bool) {"
+    "  (forall v: val :: {V(v)} V(v) && A[v] ==> Ri[v])"
     "}");
 
   D("procedure see_empty();"
     "modifies W;"
-    "ensures sees_empty(A,R) ==> (forall o: op :: {O(o)} active(o,N,C) ==> W[o]);"
-    "ensures sees_empty(A,R) ==> (forall o: op :: {O(o)} !active(o,N,C) ==> W[o] == old(W[o]));");
+    "ensures sees_empty(A,Ri) ==> (forall o: op :: {O(o)} active(o,N,C) ==> W[o]);"
+    "ensures sees_empty(A,Ri) ==> (forall o: op :: {O(o)} !active(o,N,C) ==> W[o] == old(W[o]));");
 
   D("procedure violin.init()"
     "modifies N, C;"
     "{"
     "  call op.init();"
-    "  assume (forall v: val :: !A[v]);"
-    "  assume (forall v: val :: !R[v]);"
+    "  assume (forall v: val :: {V(v)} V(v) ==> v >= 0 && v <= #VALUES);"
+    "  assume (forall v: val :: {V(v)} !Ai[v]);"
+    "  assume (forall v: val :: {V(v)} !A[v]);"
+    "  assume (forall v: val :: {V(v)} !Ri[v]);"
+    "  assume !Ai[empty];"
+    "  assume !A[empty];"
+    "  assume !Ri[empty];"
     "  assume (forall o: op :: {O(o)} !W[o]);"
     "}");
 
   D("procedure add.start(v: val) returns (o: op)"
     "modifies N;"
+    "modifies Ai;"
     "{"
     "  call o := op.start();"
     "  assume m(o) == add;"
     "  assume v(o) == v;"
     "  assume V(v);"
+    "  Ai[v(o)] := true;"
     "  return;"
     "}");
 
@@ -194,15 +206,15 @@ void violin_decls() {
 
   D("procedure remove.start(ignored: val) returns (o: op)"
     "modifies N;"
-    "modifies R, W;"
+    "modifies Ri, W;"
     "{"
     "  call o := op.start();"
     "  assume m(o) == remove;"
     "  if (v(o) == empty) {"
-    "    W[o] := sees_empty(A,R);"
+    "    W[o] := sees_empty(A,Ri);"
     "  } else {"
-    "    R[v(o)] := true;"
-    "    if (sees_empty(A,R)) {"
+    "    Ri[v(o)] := true;"
+    "    if (sees_empty(A,Ri)) {"
     "      call see_empty();"
     "    }"
     "  }"
@@ -213,7 +225,6 @@ void violin_decls() {
     "modifies C;"
     "{"
     "  assume v(o) == v;"
-    "  assume v != empty ==> V(v);"
     "  call op.finish(o);"
     "  return;"
     "}");
