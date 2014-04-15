@@ -26,7 +26,6 @@ void violin_decls();
   __SMACK_code("call " #op ".finish($myop,@);", val)
 
 #define VALUES(n) \
-  __SMACK_top_decl("const #VALUES: int;"); \
   __SMACK_top_decl("axiom #VALUES == " #n ";")
 
 
@@ -35,7 +34,9 @@ void violin_decls() {
   /****************************************************************************/
   /*        GENERIC           CODE          FOR           OPERATIONS          */
   /****************************************************************************/
-  
+
+  D("const #VALUES: int;");
+    
   D("type op = int;");
   D("type method;");
   D("type val = int;");

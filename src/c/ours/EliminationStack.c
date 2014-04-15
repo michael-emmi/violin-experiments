@@ -22,6 +22,7 @@
     return false; \
   }
 #define CAS(t,x,y,z) t ## _cas(x,y,z)
+// #define CAS(t,x,y,z) __atomic_compare_exchange_n(x,&(y),z,true,0,0)
 
 #define LOCATION_ARRAY_SIZE 7
 #define COLLISION_ARRAY_SIZE 2
@@ -89,13 +90,21 @@ void LesOP(struct ThreadInfo *p) {
 		if (location[him] && location[him]->cell.pdata != EMPTY.pdata) {
 			struct ThreadInfo* q = location[him];
 
-			if(q != NULL && q->id == him && q->op != p->op) {
+			if (q != NULL && q->id == him && q->op != p->op) {
+
+        __SMACK_code("assert false;"); // reachable (10s)
 
 				if (CAS(ti,&location[mypid],p,NULL)) {
+
+          // __SMACK_code("assert false;"); // reachable (10s w/ 10 delays)
+            
 					if (TryCollision(p,q,him) == true)
 						return;
-					else
+					else {
+            // __SMACK_code("assert false;"); // hard to reach
+
 						goto stack;
+          }
 				}
 				else {
 					FinishCollision(p);
@@ -125,7 +134,7 @@ bool TryPerformStackOp(struct ThreadInfo* p) {
 		p->cell.pnext = phead;
 
     __SMACK_code("assume {:yield} true;");
-    BOOKMARK("stack");
+    // BOOKMARK("stack");
 
 		if(CAS(c,&S.ptop,phead,&p->cell)) {
 			return true;
@@ -142,7 +151,7 @@ bool TryPerformStackOp(struct ThreadInfo* p) {
 		pnext = phead->pnext;
 
     __SMACK_code("assume {:yield} true;");
-    BOOKMARK("stack");
+    // BOOKMARK("stack");
 
 		if (CAS(c,&S.ptop,phead,pnext)) {
 			// p->cell = *phead; // actual code, modified to avoid memcpy
@@ -174,40 +183,41 @@ bool TryCollision(struct ThreadInfo *p, struct ThreadInfo *q, int him) {
 	if (p->op == PUSH) {
 
     __SMACK_code("assume {:yield} true;");
-    BOOKMARK("collide");
+    // BOOKMARK("collide");
 
 		if (CAS(ti,&location[him],q,p))
 			return true;
 		else
 			return false;
 	}
-	if(p->op == POP) {
+	if (p->op == POP) {
 
     __SMACK_code("assume {:yield} true;");
-    BOOKMARK("collide");
+    // BOOKMARK("collide");
 
-		if(CAS(ti,&location[him],q,NULL)){
+		if (CAS(ti,&location[him],q,NULL)) {
 			// p->cell = q->cell; // actual code, modified to avoid memcpy
       p->cell.pdata = q->cell.pdata;
 
-			location[mypid]=NULL;
+			location[mypid] = NULL;
 			return true;
 		}
-		else
+		else {
+      // __SMACK_code("assert false;"); // hard to reach
 			return false;
+    }
 	}
 	return false;
 }
 
 void Init() {
-  // TODO the location array should be initial clear
 
 }
 
 void Push(int x) {
 
   __SMACK_code("assume {:yield} true;");
-  BOOKMARK("start");
+  // BOOKMARK("start");
 
   VIOLIN_PROC;
   VIOLIN_OP;
@@ -226,7 +236,7 @@ void Push(int x) {
 int Pop() {
 
   __SMACK_code("assume {:yield} true;");
-  BOOKMARK("start");
+  // BOOKMARK("start");
 
   VIOLIN_PROC;
   VIOLIN_OP;
@@ -236,9 +246,10 @@ int Pop() {
   ti->id = unique_id++;
   ti->op = POP;
   ti->spin = 1;
-	StackOp(ti);
+  StackOp(ti);
   
   VIOLIN_OP_FINISH(remove,ti->cell.pdata);
+  // __SMACK_code("assert @ != 0;", ti->cell.pdata);
   return ti->cell.pdata;
 }
 
@@ -247,7 +258,7 @@ int main() {
   VIOLIN_INIT;
   Init();
 
-  VALUES(4);
+  // VALUES(2);
 
   // __SMACK_top_decl("axiom {:static_threads} true;");
 
@@ -255,15 +266,15 @@ int main() {
   __SMACK_decl("var t1, t2, t3, t4, t5, t6: int;");
   // __SMACK_code("assume {:asyncbegin} true;");
   __SMACK_code("call {:async t1} @(@);", Push, 1); // Dx0 -> 0
-  __SMACK_code("call {:async t2} @(@);", Push, 2); // Dx1 -> 1
-  __SMACK_code("call {:async t3} @(@);", Push, 3); // Dx1 -> 2
-  __SMACK_code("call {:async t4} @(@);", Push, 4); // Dx1 -> 0,1
+  __SMACK_code("call {:async t2} @(@);", Push, 1); // Dx1 -> 1
+  __SMACK_code("call {:async t3} @(@);", Push, 1); // Dx1 -> 2
+  __SMACK_code("call {:async t4} @(@);", Push, 1); // Dx1 -> 0,1
   __SMACK_code("call {:async t5} x := @();", Pop); // Dx1 -> 0,1
   __SMACK_code("call {:async t6} x := @();", Pop); // Dx2 -> 0,1,2
   // __SMACK_code("assume {:asyncend} true;");
   
   __SMACK_code("assume {:yield} true;");        // Dx1 -> 3
-  BOOKMARK("here");
+  // BOOKMARK("here");
 
   // ROUND(t1,"start",1,0); ROUND(t1,"stack",1,0); ROUND(t1,"collide",1,0);
   // ROUND(t2,"start",1,1); ROUND(t2,"stack",1,1); ROUND(t2,"collide",1,1);
@@ -274,6 +285,6 @@ int main() {
   // ROUND(0,"here",1,2);
   // ROUND(t5,"start",1,1);
 
-  VIOLIN_CHECK(stack);
+  // VIOLIN_CHECK(stack);
   return 0;
 }
