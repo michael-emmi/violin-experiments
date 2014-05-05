@@ -79,29 +79,43 @@ void StackOp(struct ThreadInfo *p) {
 void LesOP(struct ThreadInfo *p) {
   int mypid = p->id;
 
-	while (1) {
+  // while (1) {
 		location[mypid] = p;
     int pos = GetPosition(p); // CONSTANTIN: pos = random() % MAX_THREADS
 		int him = collision[pos];
 
+    // REACH(him == 4); // OK
+
 		while (!CAS(int,&collision[pos],him,mypid))
 			him = collision[pos];
 
-		if (location[him] && location[him]->cell.pdata != EMPTY.pdata) {
+    // REACH(mypid == 5 && him == 4); // 121s/10D/2R/1U
+
+		if (him > 0) {
 			struct ThreadInfo* q = location[him];
+
+      REACH(mypid == 5 && him == 4); // 138s/10D/2R/1U
 
 			if (q != NULL && q->id == him && q->op != p->op) {
 
-        __SMACK_code("assert false;"); // reachable (10s)
+        // REACH(true); // reachable (10s)
+
+        // REACH(mypid == 5 && him == 4); // step 7
+
+        // REACH(mypid == 6 && him == 5); // step 8
+
+        __SMACK_code("assume {:yield} true;");
 
 				if (CAS(ti,&location[mypid],p,NULL)) {
 
-          // __SMACK_code("assert false;"); // reachable (10s w/ 10 delays)
+          // REACH(true); // reachable (10s w/ 10 delays)
             
-					if (TryCollision(p,q,him) == true)
+					if (TryCollision(p,q,him) == true) {
+            // REACH(mypid == 5); // step 9
 						return;
-					else {
-            // __SMACK_code("assert false;"); // hard to reach
+
+					} else {
+            // REACH(true); // hard to reach
 
 						goto stack;
           }
@@ -112,14 +126,20 @@ void LesOP(struct ThreadInfo *p) {
 				}
 			}
 		}
+
 		delay(p->spin); // CONSTANTIN: sleep(p->spin)
 
+    // REACH(mypid == 4); // step 6
+
     __SMACK_code("assume {:yield} true;");
+
+    // REACH(mypid == 4 && location[mypid] != p); // step 12
+
 		if (!CAS(ti,&location[mypid],p,NULL)) {
 			FinishCollision(p);
 			return;
 		}
-  } // The wrong place!
+  // } // The wrong place!
 stack:
 		if (TryPerformStackOp(p) == true)
 			return;
@@ -133,10 +153,16 @@ bool TryPerformStackOp(struct ThreadInfo* p) {
 		phead = S.ptop;
 		p->cell.pnext = phead;
 
+    // REACH(p->id == 5); // step 3
+
     __SMACK_code("assume {:yield} true;");
     // BOOKMARK("stack");
 
 		if(CAS(c,&S.ptop,phead,&p->cell)) {
+      
+      // REACH(p->id == 1); // step 1
+      // REACH(p->id == 2); // step 5
+
 			return true;
 		} else
 			return false;
@@ -149,6 +175,9 @@ bool TryPerformStackOp(struct ThreadInfo* p) {
 			return true;
 		}
 		pnext = phead->pnext;
+
+    // REACH(p->id == 4); // step 2
+    // REACH(p->id == 6); // step 4
 
     __SMACK_code("assume {:yield} true;");
     // BOOKMARK("stack");
@@ -195,6 +224,10 @@ bool TryCollision(struct ThreadInfo *p, struct ThreadInfo *q, int him) {
     __SMACK_code("assume {:yield} true;");
     // BOOKMARK("collide");
 
+    // REACH(true); // reachable √
+    // REACH(location[him] == q); // reachable √
+    // REACH(location[him] != q); // reachable?
+
 		if (CAS(ti,&location[him],q,NULL)) {
 			// p->cell = q->cell; // actual code, modified to avoid memcpy
       p->cell.pdata = q->cell.pdata;
@@ -203,7 +236,7 @@ bool TryCollision(struct ThreadInfo *p, struct ThreadInfo *q, int him) {
 			return true;
 		}
 		else {
-      // __SMACK_code("assert false;"); // hard to reach
+      // REACH(true); // hard to reach
 			return false;
     }
 	}
@@ -224,7 +257,7 @@ void Push(int x) {
   VIOLIN_OP_START(add,x);
   
 	struct ThreadInfo *ti = malloc(sizeof(struct ThreadInfo));
-  ti->id = unique_id++;
+  ti->id = ++unique_id;
 	ti->op = PUSH;
   ti->cell.pdata = x;
   ti->spin = 1;
@@ -243,13 +276,12 @@ int Pop() {
   VIOLIN_OP_START(remove,0);
   
 	struct ThreadInfo *ti = malloc(sizeof(struct ThreadInfo));
-  ti->id = unique_id++;
+  ti->id = ++unique_id;
   ti->op = POP;
   ti->spin = 1;
   StackOp(ti);
   
   VIOLIN_OP_FINISH(remove,ti->cell.pdata);
-  // __SMACK_code("assert @ != 0;", ti->cell.pdata);
   return ti->cell.pdata;
 }
 
@@ -265,12 +297,12 @@ int main() {
   __SMACK_decl("var x: int;");
   __SMACK_decl("var t1, t2, t3, t4, t5, t6: int;");
   // __SMACK_code("assume {:asyncbegin} true;");
-  __SMACK_code("call {:async t1} @(@);", Push, 1); // Dx0 -> 0
-  __SMACK_code("call {:async t2} @(@);", Push, 1); // Dx1 -> 1
-  __SMACK_code("call {:async t3} @(@);", Push, 1); // Dx1 -> 2
-  __SMACK_code("call {:async t4} @(@);", Push, 1); // Dx1 -> 0,1
-  __SMACK_code("call {:async t5} x := @();", Pop); // Dx1 -> 0,1
-  __SMACK_code("call {:async t6} x := @();", Pop); // Dx2 -> 0,1,2
+  __SMACK_code("call {:async t1} @(@);", Push, 1); // Dx0 -> 
+  __SMACK_code("call {:async t2} @(@);", Push, 1); // Dx_ -> 
+  __SMACK_code("call {:async t3} @(@);", Push, 1); // Dx_ -> 
+  __SMACK_code("call {:async t4} x := @();", Pop); // Dx_ -> 
+  __SMACK_code("call {:async t5} @(@);", Push, 1); // Dx_ -> 
+  __SMACK_code("call {:async t6} x := @();", Pop); // Dx_ -> 
   // __SMACK_code("assume {:asyncend} true;");
   
   __SMACK_code("assume {:yield} true;");        // Dx1 -> 3

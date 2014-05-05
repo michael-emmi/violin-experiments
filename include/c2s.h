@@ -18,3 +18,6 @@
     
 #define ROUND(t,b,i,k) \
   __SMACK_code("assume {:round " #t ", " #b ", " #i ", " #k "} true;")
+
+#define REACH(expr) \
+  if (expr) __SMACK_code("assert false;")
