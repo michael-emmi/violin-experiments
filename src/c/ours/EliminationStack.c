@@ -6,7 +6,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <smack.h>
-#include <violin.h>
+// #include <violin.h>
 #include <c2s.h>
 
 // XXX this translates to LLVM's cmpxchg instruction, but is really
@@ -252,9 +252,9 @@ void Push(int x) {
   __SMACK_code("assume {:yield} true;");
   // BOOKMARK("start");
 
-  VIOLIN_PROC;
-  VIOLIN_OP;
-  VIOLIN_OP_START(add,x);
+  // VIOLIN_PROC;
+  // VIOLIN_OP;
+  // VIOLIN_OP_START(add,x);
   
 	struct ThreadInfo *ti = malloc(sizeof(struct ThreadInfo));
   ti->id = ++unique_id;
@@ -263,7 +263,7 @@ void Push(int x) {
   ti->spin = 1;
 	StackOp(ti);
   
-  VIOLIN_OP_FINISH(add,0);
+  // VIOLIN_OP_FINISH(add,0);
 }
 
 int Pop() {
@@ -271,9 +271,9 @@ int Pop() {
   __SMACK_code("assume {:yield} true;");
   // BOOKMARK("start");
 
-  VIOLIN_PROC;
-  VIOLIN_OP;
-  VIOLIN_OP_START(remove,0);
+  // VIOLIN_PROC;
+  // VIOLIN_OP;
+  // VIOLIN_OP_START(remove,0);
   
 	struct ThreadInfo *ti = malloc(sizeof(struct ThreadInfo));
   ti->id = ++unique_id;
@@ -281,13 +281,13 @@ int Pop() {
   ti->spin = 1;
   StackOp(ti);
   
-  VIOLIN_OP_FINISH(remove,ti->cell.pdata);
+  // VIOLIN_OP_FINISH(remove,ti->cell.pdata);
   return ti->cell.pdata;
 }
 
 int main() {
-  VIOLIN_PROC;
-  VIOLIN_INIT;
+  // VIOLIN_PROC;
+  // VIOLIN_INIT;
   Init();
 
   // VALUES(2);
