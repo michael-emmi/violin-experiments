@@ -89,20 +89,20 @@ void LesOP(struct ThreadInfo *p) {
 		while (!CAS(int,&collision[pos],him,mypid))
 			him = collision[pos];
 
-    // REACH(mypid == 5 && him == 4); // 121s/10D/2R/1U
+    // REACH(mypid == 5 && him == 4); // 100+s/10D/2R/1U
 
 		if (him > 0) {
 			struct ThreadInfo* q = location[him];
 
-      REACH(mypid == 5 && him == 4); // 138s/10D/2R/1U
+      // REACH(mypid == 5 && him == 4); // 100+s/10D/2R/1U :: NoMaps 31s/10D/2R/1U
 
 			if (q != NULL && q->id == him && q->op != p->op) {
 
         // REACH(true); // reachable (10s)
 
-        // REACH(mypid == 5 && him == 4); // step 7
+        REACH(mypid == 5 && him == 4); // step 7 -- 26s/10D/3R/1U NoMaps
 
-        // REACH(mypid == 6 && him == 5); // step 8
+        // REACH(mypid == 6 && him == 5); // step 8 -- ??
 
         __SMACK_code("assume {:yield} true;");
 
@@ -111,11 +111,11 @@ void LesOP(struct ThreadInfo *p) {
           // REACH(true); // reachable (10s w/ 10 delays)
             
 					if (TryCollision(p,q,him) == true) {
-            // REACH(mypid == 5); // step 9
+            // REACH(mypid == 5); // step 9 -- 49s/10D/3R/1U NoMaps
 						return;
 
 					} else {
-            // REACH(true); // hard to reach
+            // REACH(mypid == 6); // step 10 -- ??
 
 						goto stack;
           }
@@ -129,7 +129,7 @@ void LesOP(struct ThreadInfo *p) {
 
 		delay(p->spin); // CONSTANTIN: sleep(p->spin)
 
-    // REACH(mypid == 4); // step 6
+    // REACH(mypid == 4); // step 6 (10s/10D/2R/1U) :: 16s/10D/3R/1U (NoMaps)
 
     __SMACK_code("assume {:yield} true;");
 
