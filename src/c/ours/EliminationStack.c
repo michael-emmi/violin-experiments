@@ -24,8 +24,10 @@
 #define CAS(t,x,y,z) t ## _cas(x,y,z)
 // #define CAS(t,x,y,z) __atomic_compare_exchange_n(x,&(y),z,true,0,0)
 
-#define LOCATION_ARRAY_SIZE 7
-#define COLLISION_ARRAY_SIZE 2
+// NOTE changing these constants has a noticable impact on verification time,
+// in very unexpected ways, i.e., smaller not better.
+#define LOCATION_ARRAY_SIZE 14
+#define COLLISION_ARRAY_SIZE 4
 
 enum stack_op { POP = 0, PUSH };
 
@@ -71,6 +73,14 @@ int GetPosition(struct ThreadInfo *p) {
 void delay(int d);
 
 void StackOp(struct ThreadInfo *p) {
+
+  // REACH(p->id == 1); // 3s/3R/1U
+  // REACH(p->id == 2); // 3s/3R/1U
+  // REACH(p->id == 3); // 3s/3R/1U
+  // REACH(p->id == 4); // 3s/3R/1U
+  // REACH(p->id == 5); // 6s/3R/1U
+  // REACH(p->id == 6); // 25s/3R/1U (WHY??)
+
 	if (TryPerformStackOp(p) == false)
 		LesOP(p);
 	return;
@@ -79,28 +89,30 @@ void StackOp(struct ThreadInfo *p) {
 void LesOP(struct ThreadInfo *p) {
   int mypid = p->id;
 
-  // while (1) {
+  // REACH(p->id == 6); // _s/3R/1U (WHY??)
+
+  while (1) {
 		location[mypid] = p;
     int pos = GetPosition(p); // CONSTANTIN: pos = random() % MAX_THREADS
 		int him = collision[pos];
 
-    // REACH(him == 4); // OK
+    // REACH(him == 4); // 6s/3R/1U
 
 		while (!CAS(int,&collision[pos],him,mypid))
 			him = collision[pos];
 
-    // REACH(mypid == 5 && him == 4); // 100+s/10D/2R/1U
+    // REACH(mypid == 5 && him == 4); // 7s/3R/1U
 
 		if (him > 0) {
 			struct ThreadInfo* q = location[him];
 
-      // REACH(mypid == 5 && him == 4); // 100+s/10D/2R/1U :: NoMaps 31s/10D/2R/1U
+      // REACH(mypid == 5 && him == 4); // 7s/3R/1U
 
 			if (q != NULL && q->id == him && q->op != p->op) {
 
-        // REACH(true); // reachable (10s)
+        // REACH(true); // 3s/3R/1U
 
-        REACH(mypid == 5 && him == 4); // step 7 -- 26s/10D/3R/1U NoMaps
+        // REACH(mypid == 5 && him == 4); // step 7 -- 7s/3R/1U
 
         // REACH(mypid == 6 && him == 5); // step 8 -- ??
 
@@ -108,10 +120,10 @@ void LesOP(struct ThreadInfo *p) {
 
 				if (CAS(ti,&location[mypid],p,NULL)) {
 
-          // REACH(true); // reachable (10s w/ 10 delays)
+          // REACH(true); // 3s/3R/1U
             
 					if (TryCollision(p,q,him) == true) {
-            // REACH(mypid == 5); // step 9 -- 49s/10D/3R/1U NoMaps
+            // REACH(mypid == 5); // step 9 -- 8s/3R/1U
 						return;
 
 					} else {
@@ -129,7 +141,7 @@ void LesOP(struct ThreadInfo *p) {
 
 		delay(p->spin); // CONSTANTIN: sleep(p->spin)
 
-    // REACH(mypid == 4); // step 6 (10s/10D/2R/1U) :: 16s/10D/3R/1U (NoMaps)
+    // REACH(mypid == 4); // step 6 -- 4s/3R/1U
 
     __SMACK_code("assume {:yield} true;");
 
@@ -139,7 +151,7 @@ void LesOP(struct ThreadInfo *p) {
 			FinishCollision(p);
 			return;
 		}
-  // } // The wrong place!
+  } // The wrong place!
 stack:
 		if (TryPerformStackOp(p) == true)
 			return;
@@ -153,21 +165,22 @@ bool TryPerformStackOp(struct ThreadInfo* p) {
 		phead = S.ptop;
 		p->cell.pnext = phead;
 
-    // REACH(p->id == 5); // step 3
+    // REACH(p->id == 5); // step 3 -- 5s/3R/1U
 
     __SMACK_code("assume {:yield} true;");
-    // BOOKMARK("stack");
 
 		if(CAS(c,&S.ptop,phead,&p->cell)) {
       
-      // REACH(p->id == 1); // step 1
-      // REACH(p->id == 2); // step 5
+      // REACH(p->id == 1); // step 1 -- 3s/3R/1U
+      // REACH(p->id == 2); // step 5 -- 3s/3R/1U
 
 			return true;
 		} else
 			return false;
 	}
 	if (p->op==POP) {
+    // REACH(p->id == 6); // 35s/3R/1U (WHY??)
+
 		phead = S.ptop;
 		if (phead == NULL) {
       // p->cell = EMPTY; // actual code, modified to avoid memcpy
@@ -176,18 +189,27 @@ bool TryPerformStackOp(struct ThreadInfo* p) {
 		}
 		pnext = phead->pnext;
 
-    // REACH(p->id == 4); // step 2
-    // REACH(p->id == 6); // step 4
+    // REACH(p->id == 4); // step 2 -- 4s/3R/1U
+    // REACH(p->id == 6); // step 4 -- 44s/3R/1U (WHY??)
 
     __SMACK_code("assume {:yield} true;");
-    // BOOKMARK("stack");
+
+    // REACH(p->id == 6); // 42s/3R/1U (WHY??)
+    REACH(p->id == 6 && S.ptop != phead); // 
 
 		if (CAS(c,&S.ptop,phead,pnext)) {
+
+      // REACH(p->id == 6); // 46s/3R/1U (WHY??)
+
 			// p->cell = *phead; // actual code, modified to avoid memcpy
       p->cell.pdata = phead->pdata;
 			return true;
 		}
 		else {
+
+      // REACH(p->id == 4); // 4s/3R/1U 
+      // REACH(p->id == 6); // _s/3R/1U (WHY??) -- WORKING HERE
+
       // p->cell = EMPTY; // actual code, modified to avoid memcpy
       p->cell.pdata = EMPTY.pdata;
 			return false;
@@ -212,7 +234,6 @@ bool TryCollision(struct ThreadInfo *p, struct ThreadInfo *q, int him) {
 	if (p->op == PUSH) {
 
     __SMACK_code("assume {:yield} true;");
-    // BOOKMARK("collide");
 
 		if (CAS(ti,&location[him],q,p))
 			return true;
@@ -222,11 +243,10 @@ bool TryCollision(struct ThreadInfo *p, struct ThreadInfo *q, int him) {
 	if (p->op == POP) {
 
     __SMACK_code("assume {:yield} true;");
-    // BOOKMARK("collide");
 
-    // REACH(true); // reachable √
-    // REACH(location[him] == q); // reachable √
-    // REACH(location[him] != q); // reachable?
+    // REACH(true); // 4s/3R/1U
+    // REACH(location[him] == q); // 4s/3R/1U
+    // REACH(location[him] != q); // ???
 
 		if (CAS(ti,&location[him],q,NULL)) {
 			// p->cell = q->cell; // actual code, modified to avoid memcpy
@@ -236,7 +256,7 @@ bool TryCollision(struct ThreadInfo *p, struct ThreadInfo *q, int him) {
 			return true;
 		}
 		else {
-      // REACH(true); // hard to reach
+      // REACH(true); // ???
 			return false;
     }
 	}
@@ -250,7 +270,6 @@ void Init() {
 void Push(int x) {
 
   __SMACK_code("assume {:yield} true;");
-  // BOOKMARK("start");
 
   // VIOLIN_PROC;
   // VIOLIN_OP;
@@ -263,13 +282,14 @@ void Push(int x) {
   ti->spin = 1;
 	StackOp(ti);
   
+  // __SMACK_code("assume #k == 0;");
+  
   // VIOLIN_OP_FINISH(add,0);
 }
 
 int Pop() {
 
   __SMACK_code("assume {:yield} true;");
-  // BOOKMARK("start");
 
   // VIOLIN_PROC;
   // VIOLIN_OP;
@@ -279,6 +299,10 @@ int Pop() {
   ti->id = ++unique_id;
   ti->op = POP;
   ti->spin = 1;
+
+  // REACH(ti->id == 4); // 3s/3R/1U
+  // REACH(ti->id == 6); // 10s/3R/1U
+
   StackOp(ti);
   
   // VIOLIN_OP_FINISH(remove,ti->cell.pdata);
@@ -292,30 +316,14 @@ int main() {
 
   // VALUES(2);
 
-  // __SMACK_top_decl("axiom {:static_threads} true;");
-
   __SMACK_decl("var x: int;");
-  __SMACK_decl("var t1, t2, t3, t4, t5, t6: int;");
-  // __SMACK_code("assume {:asyncbegin} true;");
-  __SMACK_code("call {:async t1} @(@);", Push, 1); // Dx0 -> 
-  __SMACK_code("call {:async t2} @(@);", Push, 1); // Dx_ -> 
-  __SMACK_code("call {:async t3} @(@);", Push, 1); // Dx_ -> 
-  __SMACK_code("call {:async t4} x := @();", Pop); // Dx_ -> 
-  __SMACK_code("call {:async t5} @(@);", Push, 1); // Dx_ -> 
-  __SMACK_code("call {:async t6} x := @();", Pop); // Dx_ -> 
-  // __SMACK_code("assume {:asyncend} true;");
-  
+  __SMACK_code("call {:async} @(@);", Push, 1); // Dx0 -> 
+  __SMACK_code("call {:async} @(@);", Push, 1); // Dx_ -> 
+  __SMACK_code("call {:async} @(@);", Push, 1); // Dx_ -> 
+  __SMACK_code("call {:async} x := @();", Pop); // Dx_ -> 
+  __SMACK_code("call {:async} @(@);", Push, 1); // Dx_ -> 
+  __SMACK_code("call {:async} x := @();", Pop); // Dx_ -> 
   __SMACK_code("assume {:yield} true;");        // Dx1 -> 3
-  // BOOKMARK("here");
-
-  // ROUND(t1,"start",1,0); ROUND(t1,"stack",1,0); ROUND(t1,"collide",1,0);
-  // ROUND(t2,"start",1,1); ROUND(t2,"stack",1,1); ROUND(t2,"collide",1,1);
-  // ROUND(t3,"start",1,2); ROUND(t3,"stack",1,2); ROUND(t3,"collide",1,2);
-  // ROUND(t4,"start",1,0); ROUND(t4,"stack",1,1); ROUND(t4,"collide",1,1);
-  // ROUND(t5,"start",1,0); ROUND(t5,"stack",1,1); ROUND(t5,"collide",1,1);
-  // ROUND(t6,"start",1,0); ROUND(t6,"stack",1,1); ROUND(t6,"collide",1,2);
-  // ROUND(0,"here",1,2);
-  // ROUND(t5,"start",1,1);
 
   // VIOLIN_CHECK(stack);
   return 0;

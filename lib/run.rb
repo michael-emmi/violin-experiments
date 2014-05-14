@@ -5,7 +5,7 @@ def one_test(c_src, args = {})
     puts "Looking for bugs in #{c_src} ..."
     puts "-" * 80
     
-    frontend = "clang -I/usr/local/include/smack -I./include #{c_src} -c -emit-llvm -o a.o"
+    frontend = "clang -I/usr/local/include/smack -DMEMORY_MODEL_NO_REUSE_IMPLS -I./include #{c_src} -c -emit-llvm -o a.o"
     frontend += " -DVIOLIN_COUNTING=0" if $counting
     c2s = "~/Code/c2s/lib/c2s.rb a.o #{ARGV * " "}"
     
