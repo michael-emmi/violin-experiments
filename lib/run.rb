@@ -5,8 +5,9 @@ def one_test(c_src, args = {})
     puts "Looking for bugs in #{c_src} ..."
     puts "-" * 80
     
-    frontend = "clang -I/usr/local/include/smack -DMEMORY_MODEL_NO_REUSE_IMPLS -I./include #{c_src} -c -emit-llvm -o a.o"
-    frontend += " -DVIOLIN_COUNTING=0" if $counting
+    frontend = "clang -I/usr/local/include/smack -I./include #{c_src} -c -emit-llvm -o a.o"
+    frontend << " -DMEMORY_MODEL_NO_REUSE_IMPLS"
+    frontend << " -DVIOLIN_COUNTING=0" if $counting
     c2s = "~/Code/c2s/lib/c2s.rb a.o #{ARGV * " "}"
     
     puts frontend if $verbose
@@ -22,7 +23,7 @@ end
 
 $keep = !ARGV.grep(/^(-k|--keep)$/).empty?
 $verbose = !ARGV.grep(/^(-v|--verbose)$/).empty?
-$counting = !ARGV.grep(/--counting/).empty?
+$counting = true # !ARGV.grep(/--counting/).empty?
 ARGV.reject!{|arg| arg =~ /--counting/}
 ARGV << "--verifier boogie_fi" if ARGV.grep(/--verifier/).empty?
 

@@ -64,6 +64,7 @@ void violin_decls() {
 
   D("procedure violin.init()"
     "{"
+    "  assume !V(empty);"
     "  assume (forall v: val :: {V(v)} #add.open[v] == 0);"
     "  assume (forall v: val :: {V(v)} #add.done[v] == 0);"
     "  assume (forall v: val :: {V(v)} #rem.open[v] == 0);"
@@ -87,14 +88,14 @@ void violin_decls() {
   D("procedure violin.remove.start(v: val)"
     "modifies #rem.open;"
     "{"
-    "  #rem.open[v] := #rem.open[v] + 1;"
+    "  #rem.open[0] := #rem.open[0] + 1;"
     "}");
   
   D("procedure violin.remove.finish(v: val)"
     "modifies #rem.open, #rem.done;"
     "{"
-    "  assume V(v);"
-    "  #rem.open[v] := #rem.open[v] - 1;"
+    "  assume v == empty || V(v);"
+    "  #rem.open[0] := #rem.open[0] - 1;"
     "  #rem.done[v] := #rem.done[v] + 1;"
     "}");
   
@@ -201,6 +202,7 @@ void violin_decls() {
   D("procedure violin.init()"
     "modifies violin.time, violin.ret;"
     "{"
+    "  assume !V(empty);"
     "  violin.time := 0;"
     "  violin.ret := false;"
     "  assume (forall v: val, t0: int :: {V(v),T(t0)} #add.open[v][t0] == 0);"

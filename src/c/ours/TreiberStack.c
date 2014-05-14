@@ -31,15 +31,14 @@ void push (int v) {
   struct cell *t;
   struct cell *x = malloc(sizeof *x);
   x->data = v;
-  
+
   do {
       __SMACK_code("assume {:yield} true;");
-      BOOKMARK("Y");
       t = s;
       x->next = t;
   } while (!cas(&s,t,x));
 
-  VIOLIN_OP_FINISH(add,0);
+  VIOLIN_OP_FINISH(add,v);
 }
 
 int pop () {
@@ -51,7 +50,6 @@ int pop () {
   struct cell *x = malloc(sizeof *x);
   do {
       __SMACK_code("assume {:yield} true;");
-      BOOKMARK("Y");
       t = s;
       if(t == 0) {
           VIOLIN_OP_FINISH(remove,-1);
@@ -59,7 +57,7 @@ int pop () {
       }
       x = t->next;
   } while (!cas(&s,t,x));
-  
+
   VIOLIN_OP_FINISH(remove,t->data);
   return t->data;
 }
@@ -71,18 +69,12 @@ int main() {
 
   VALUES(2);
 
-  // __SMACK_top_decl("axiom {:static_threads} true;");
   __SMACK_decl("var x: int;");
-  __SMACK_decl("var t1, t2, t3, t4: int;");
-  __SMACK_code("call {:async t1} @(@);", push, 1);
-  __SMACK_code("call {:async t2} @(@);", push, 2);
-  __SMACK_code("call {:async t3} x := @();", pop);
-  __SMACK_code("call {:async t4} x := @();", pop);
-
+  __SMACK_code("call {:async} @(@);", push, 1);
+  __SMACK_code("call {:async} @(@);", push, 2);
+  __SMACK_code("call {:async} x := @();", pop);
+  __SMACK_code("call {:async} x := @();", pop);
   __SMACK_code("assume {:yield} true;");
-
-  BOOKMARK("here");  
-  ROUND(0,"here",1,2);
 
   VIOLIN_CHECK(stack);
   return 0;
