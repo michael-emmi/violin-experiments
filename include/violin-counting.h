@@ -9,7 +9,8 @@
 #define VALUE(v) \
   __SMACK_top_decl("axiom V(" #v ");")
 
-#define VALUES(n) 
+#define VALUES(n) \
+  __SMACK_top_decl("axiom #V == " #n ";")
     
 #if VIOLIN_COUNTING == 0
   
@@ -50,6 +51,7 @@
     
 void violin_decls() {
 
+  D("const #V: int;");
   D("type val = int;");
   D("const unique empty: val;");
   D("axiom (empty == -1);");
@@ -62,36 +64,37 @@ void violin_decls() {
   D("var #rem.done: [val] int;");
   D("function V(val) returns (bool);");
 
-  D("procedure violin.init()"
+  D("procedure {:atomic} violin.init()"
     "{"
     "  assume !V(empty);"
+    "  assume (forall v: val :: {V(v)} !V(v) || v > 0 && v <= #V);"
     "  assume (forall v: val :: {V(v)} #add.open[v] == 0);"
     "  assume (forall v: val :: {V(v)} #add.done[v] == 0);"
     "  assume (forall v: val :: {V(v)} #rem.open[v] == 0);"
     "  assume (forall v: val :: {V(v)} #rem.done[v] == 0);"
     "}");
   
-  D("procedure violin.add.start(v: val)"
+  D("procedure {:atomic} violin.add.start(v: val)"
     "modifies #add.open;"
     "{"
     "  assume V(v);"
     "  #add.open[v] := #add.open[v] + 1;"
     "}");
   
-  D("procedure violin.add.finish(v: val)"
+  D("procedure {:atomic} violin.add.finish(v: val)"
     "modifies #add.open, #add.done;"
     "{"
     "  #add.open[v] := #add.open[v] - 1;"
     "  #add.done[v] := #add.done[v] + 1;"
     "}");
   
-  D("procedure violin.remove.start(v: val)"
+  D("procedure {:atomic} violin.remove.start(v: val)"
     "modifies #rem.open;"
     "{"
     "  #rem.open[0] := #rem.open[0] + 1;"
     "}");
   
-  D("procedure violin.remove.finish(v: val)"
+  D("procedure {:atomic} violin.remove.finish(v: val)"
     "modifies #rem.open, #rem.done;"
     "{"
     "  assume v == empty || V(v);"
@@ -127,7 +130,7 @@ void violin_decls() {
   D("function V(val) returns (bool);");
   D("function T(int) returns (bool);");
   
-  D("procedure violin.add.start(v: val) returns (t: int)"
+  D("procedure {:atomic} violin.add.start(v: val) returns (t: int)"
     "modifies #add.open;"
     "{"
     "  assume V(v);"
@@ -140,7 +143,7 @@ void violin_decls() {
     "  #add.open[v][t] := #add.open[v][t] + 1;"
     "}");
   
-  D("procedure violin.add.finish(v: val, t0: int)"
+  D("procedure {:atomic} violin.add.finish(v: val, t0: int)"
     "modifies violin.time, violin.ret, #add.open, #add.done;"
     "{"
     "  var t: int;"
@@ -151,7 +154,7 @@ void violin_decls() {
     "  #add.done[v][t0][t] := #add.done[v][t0][t] + 1;"
     "}");
   
-  D("procedure violin.remove.start(v: val) returns (t: int)"
+  D("procedure {:atomic} violin.remove.start(v: val) returns (t: int)"
     "modifies #rem.open;"
     "{"
     "  assume T(t);"
@@ -163,7 +166,7 @@ void violin_decls() {
     "  #rem.open[0][t] := #rem.open[0][t] + 1;"
     "}");
   
-  D("procedure violin.remove.finish(v: val, t0: int)"
+  D("procedure {:atomic} violin.remove.finish(v: val, t0: int)"
     "modifies violin.time, violin.ret, #rem.open, #rem.done;"
     "{"
     "  var t: int;"
@@ -199,7 +202,7 @@ void violin_decls() {
     "  XXX_spec(A.o,A.d,R.o,R.d)"
     "}");  
 
-  D("procedure violin.init()"
+  D("procedure {:atomic} violin.init()"
     "modifies violin.time, violin.ret;"
     "{"
     "  assume !V(empty);"

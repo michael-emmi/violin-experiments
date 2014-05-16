@@ -1,3 +1,6 @@
+#define MEMORY_MODEL_NO_REUSE 1 
+#define VIOLIN_COUNTING 0
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <smack.h>
@@ -11,10 +14,6 @@ struct cell {
 
 struct cell *s;
 
-void initialize() {
-    s = 0;
-}
-
 bool cas(struct cell **p, struct cell* t, struct cell *x) {
   if (*p == t) {
     *p = x;
@@ -24,6 +23,7 @@ bool cas(struct cell **p, struct cell* t, struct cell *x) {
 
 
 void push (int v) {
+  __SMACK_code("assume {:yield} true;");
   VIOLIN_PROC;
   VIOLIN_OP;
   VIOLIN_OP_START(add,v);
@@ -42,6 +42,7 @@ void push (int v) {
 }
 
 int pop () {
+  __SMACK_code("assume {:yield} true;");
   VIOLIN_PROC;
   VIOLIN_OP;
   VIOLIN_OP_START(remove,0);
@@ -65,15 +66,14 @@ int pop () {
 int main() {
   VIOLIN_PROC;
   VIOLIN_INIT;
-  initialize();
 
   VALUES(2);
 
   __SMACK_decl("var x: int;");
   __SMACK_code("call {:async} @(@);", push, 1);
+  __SMACK_code("call {:async} x := @();", pop);
+  __SMACK_code("call {:async} x := @();", pop);
   __SMACK_code("call {:async} @(@);", push, 2);
-  __SMACK_code("call {:async} x := @();", pop);
-  __SMACK_code("call {:async} x := @();", pop);
   __SMACK_code("assume {:yield} true;");
 
   VIOLIN_CHECK(stack);

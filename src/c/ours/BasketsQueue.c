@@ -1,3 +1,9 @@
+// NOTE that SMACK cannot currently analyze this example precisely
+// see https://github.com/smackers/smack/issues/47
+
+#define MEMORY_MODEL_NO_REUSE 1 
+#define VIOLIN_COUNTING 0
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <smack.h>
@@ -10,11 +16,11 @@ struct pointer_t {
     bool deleted;
     int tag;
 };
+
 struct node_t {
     int value;
     struct pointer_t next;
 };
-
 
 struct pointer_t tail;
 struct pointer_t head;
@@ -42,6 +48,14 @@ void initialize() {
     struct pointer_t *ht = createPt(new_node,false,0);
     tail = *ht;
     head = *ht;
+}
+
+bool equalPointers(struct pointer_t p1, struct pointer_t p2) {
+    return p1.ptr == p2.ptr && p1.deleted == p2.deleted && p1.tag == p2.tag;
+}
+
+bool equalNodes(struct node_t n1, struct node_t n2) {
+    return n1.value == n2.value && equalPointers(n1.next,n2.next);
 }
 
 bool cas(struct pointer_t *p, struct pointer_t t, struct pointer_t x) {
@@ -85,18 +99,10 @@ void printQueue() {
 
 void backoff_scheme() { }
 
-bool equalPointers(struct pointer_t p1, struct pointer_t p2) {
-    return p1.ptr == p2.ptr && p1.deleted == p2.deleted && p1.tag == p2.tag;
-}
-
-bool equalNodes(struct node_t n1, struct node_t n2) {
-    return n1.value == n2.value && equalPointers(n1.next,n2.next);
-}
-
 void enqueue(int val) {
   VIOLIN_PROC;
   VIOLIN_OP;
-  VIOLIN_OP_START(add,v);
+  VIOLIN_OP_START(add,val);
 
     struct node_t *nd = malloc(sizeof *nd);
     nd->value = val;
@@ -190,6 +196,7 @@ int dequeue() {
 int main() {
   VIOLIN_PROC;
   VIOLIN_INIT;
+  VALUES(2);
   initialize();
 
   // __SMACK_top_decl("axiom {:static_threads} true;");
