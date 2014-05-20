@@ -49,6 +49,7 @@ int pop () {
 int main() {
   add_init_fn(reset);
   violin_init(push,pop);
+  set_alloc(FIFO);
   declare_operation(Add,1);
   declare_operation(Add,2);
   declare_operation(Add,3);
@@ -56,6 +57,6 @@ int main() {
   declare_operation(Remove,0);
   declare_operation(Remove,0);
   declare_operation(Remove,0);
-  violin_run();
+  violin_run(3);
   return 0;
 }

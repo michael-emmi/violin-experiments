@@ -2,7 +2,7 @@
 
 $compile = "clang++ -I./include -I./include/basekit -I./include/coroutine -L./lib -lcoroutine"
 
-Dir.glob("src/**/*.cpp") do |cpp|
+Dir.glob("src/**/*.{c,cpp}") do |cpp|
   puts "#{$compile} #{cpp}"
   system "#{$compile} #{cpp}"
   system "./a.out | grep \"[Vv]\""

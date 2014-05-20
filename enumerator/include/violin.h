@@ -145,7 +145,11 @@ int search(int num_delays) {
 /*****************************************************************************/
 
 enum { DEFAULT, FIFO, LIFO };
-const int ALLOC = FIFO;
+int ALLOC;
+
+void set_alloc(int policy) {
+  ALLOC = policy;
+}
 
 deque<void*> free_pool;
 void* my_malloc(int size) {
@@ -195,8 +199,8 @@ void violin_init(void (*add_fn)(int), int (*rem_fn)(void)) {
   add_init_fn(reset_counters);
 }
 
-int violin_run() {
-  search(3);
+int violin_run(int num_delays) {
+  search(num_delays);
   cout << "Found " << num_violations << " violations." << endl;
   return 0;
 }
