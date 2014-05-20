@@ -1,7 +1,7 @@
 // NOTE that SMACK cannot currently analyze this example precisely
 // see https://github.com/smackers/smack/issues/47
 
-#define MEMORY_MODEL_NO_REUSE 1 
+#define MEMORY_MODEL_NO_REUSE_IMPLS 1 
 #define VIOLIN_COUNTING 0
 
 #include <stdio.h>
@@ -12,6 +12,7 @@
 struct node_t;
 
 struct pointer_t {
+    int __junk__; // subvert a nasty LLVM optimization
     struct node_t *ptr;
     bool deleted;
     int tag;
@@ -59,7 +60,13 @@ bool equalNodes(struct node_t n1, struct node_t n2) {
 }
 
 bool cas(struct pointer_t *p, struct pointer_t t, struct pointer_t x) {
+
+    __SMACK_code("assume {:yield} true;");
+
     if (equalPointers(*p,t)) {
+
+        __SMACK_code("assume {:yield} true;");
+
         *p = x;
         return true;
     } else return false;
@@ -100,6 +107,9 @@ void printQueue() {
 void backoff_scheme() { }
 
 void enqueue(int val) {
+
+  __SMACK_code("assume {:yield} true;");
+
   VIOLIN_PROC;
   VIOLIN_OP;
   VIOLIN_OP_START(add,val);
@@ -145,6 +155,9 @@ void free_chain(struct pointer_t head, struct pointer_t next) {
 }
 
 int dequeue() {
+
+  __SMACK_code("assume {:yield} true;");
+
   VIOLIN_PROC;
   VIOLIN_OP;
   VIOLIN_OP_START(remove,0);
@@ -202,6 +215,7 @@ int main() {
   // __SMACK_top_decl("axiom {:static_threads} true;");
   __SMACK_decl("var x: int;");
   __SMACK_code("call {:async} @(@);", enqueue, 1);
+  __SMACK_code("call {:async} @(@);", enqueue, 2);
   __SMACK_code("call {:async} x := @();", dequeue);
   __SMACK_code("call {:async} x := @();", dequeue);
 

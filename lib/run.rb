@@ -29,8 +29,8 @@ puts "=" * 80
 puts "Running CDS Experiments ..."
 puts "=" * 80
 
-one_test 'src/c/ours/TreiberStack.c'
-one_test 'src/c/ours/TreiberStack-bugged.c'
-one_test 'src/c/ours/EliminationStack-scratch.c'
+# one_test 'src/c/ours/TreiberStack.c'
+# one_test 'src/c/ours/TreiberStack-bugged.c'
+# one_test 'src/c/ours/EliminationStack-scratch.c'
 
-# one_test 'src/c/ours/BasketsQueue.c'
+one_test 'src/c/ours/BasketsQueue.c'
