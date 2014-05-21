@@ -7,7 +7,15 @@
 
 #include "violin.h"
 
-#define CAS(t,x,y,z) __atomic_compare_exchange_n(x,&(y),z,true,0,0)
+bool cas(void **p, void* t, void *x) {
+  if (*p == t) {
+    *p = x;
+    return true;
+  } else return false;
+}
+
+// #define CAS(t,x,y,z) __atomic_compare_exchange_n(x,&(y),z,true,0,0)
+#define CAS(t,x,y,z) cas((void**) x, (void*) y, (void*) z)
 
 #define LOCATION_ARRAY_SIZE 14
 #define COLLISION_ARRAY_SIZE 4
@@ -45,7 +53,7 @@ bool TryCollision(struct ThreadInfo *p, struct ThreadInfo *q, int him);
 
 int GetPosition(struct ThreadInfo *p) {
   static int pos = 0;
-  return pos++%2;
+  return pos;
 }
 void delay(int d) {
   
@@ -61,6 +69,7 @@ void LesOP(struct ThreadInfo *p) {
   int mypid = p->id;
 
   while (1) {
+    Yield();
 		location[mypid] = p;
     int pos = GetPosition(p); // CONSTANTIN: pos = random() % MAX_THREADS
 
@@ -73,15 +82,21 @@ void LesOP(struct ThreadInfo *p) {
 		while (!CAS(int,&collision[pos],him,mypid))
 			him = collision[pos];
 
+    Yield();
+
 		if (him > 0) {
       
 			struct ThreadInfo* q = location[him];
+
+      Yield();
 
 			if (q != NULL && q->id == him && q->op != p->op) {
 
         Yield();
 
 				if (CAS(ti,&location[mypid],p,NULL)) {
+
+          Yield();
 
 					if (TryCollision(p,q,him) == true) {
 						return;
@@ -91,6 +106,7 @@ void LesOP(struct ThreadInfo *p) {
           }
 				}
 				else {
+          Yield();
 					FinishCollision(p);
 					return;
 				}
@@ -102,6 +118,7 @@ void LesOP(struct ThreadInfo *p) {
     Yield();
 
 		if (!CAS(ti,&location[mypid],p,NULL)) {
+      Yield();
 			FinishCollision(p);
 			return;
 		}
@@ -122,14 +139,18 @@ bool TryPerformStackOp(struct ThreadInfo* p) {
     Yield();
 
 		if(CAS(c,&S.ptop,phead,&p->cell)) {
+      Yield();
 			return true;
-		} else
+		} else {
+      Yield();
 			return false;
+    }
 	}
 	if (p->op==POP) {
 
 		phead = S.ptop;
 		if (phead == NULL) {
+      Yield();
       p->cell = EMPTY;
 			return true;
 		}
@@ -138,10 +159,12 @@ bool TryPerformStackOp(struct ThreadInfo* p) {
     Yield();
 
 		if (CAS(c,&S.ptop,phead,pnext)) {
+      Yield();
       p->cell = *phead;
 			return true;
 		}
 		else {
+      Yield();
       p->cell = EMPTY;
 			return false;
 		}
@@ -153,6 +176,7 @@ void FinishCollision(struct ThreadInfo *p) {
   int mypid = p->id;
   
 	if (p->op == POP) {
+    Yield();
     p->cell = location[mypid]->cell;
 		location[mypid] = NULL;
 	}
@@ -160,14 +184,14 @@ void FinishCollision(struct ThreadInfo *p) {
 
 bool TryCollision(struct ThreadInfo *p, struct ThreadInfo *q, int him) {
   int mypid = p->id;
-
 	if (p->op == PUSH) {
 
     Yield();
 
-		if (CAS(ti,&location[him],q,p))
+		if (CAS(ti,&location[him],q,p)) {
+      Yield();
 			return true;
-		else
+		} else
 			return false;
 	}
 	if (p->op == POP) {
@@ -175,6 +199,7 @@ bool TryCollision(struct ThreadInfo *p, struct ThreadInfo *q, int him) {
     Yield();
 
 		if (CAS(ti,&location[him],q,NULL)) {
+      Yield();
       p->cell = q->cell;
 			location[mypid] = NULL;
 			return true;
@@ -200,7 +225,7 @@ void Push(int x) {
 	ti->op = PUSH;
   ti->cell.pdata = x;
   ti->spin = 1;
-	StackOp(ti);
+  StackOp(ti);
 }
 
 int Pop() {
@@ -222,8 +247,6 @@ int main() {
   declare_operation(Add,4);
   declare_operation(Remove,0);
   declare_operation(Remove,0);
-  declare_operation(Remove,0);
-  declare_operation(Remove,0);
-  violin_run(15);
+  violin_run(7);
   return 0;
 }

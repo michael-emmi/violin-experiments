@@ -3,6 +3,7 @@
 #include <stack>
 #include <deque>
 #include <map>
+#include <time.h>
 using namespace std;
 
 /*****************************************************************************/
@@ -64,7 +65,6 @@ void Run(void *context) {
 
 vector<void(*)()> inits;
 deque<Operation*> sched;
-vector<int> delays;
 
 void scheduler_init() {
   scheduler = Coro_new();
@@ -89,54 +89,46 @@ void init_run() {
 }
 
 int search(int num_delays) {
-  for (int i=0; i<num_delays; i++)
-    delays.push_back(i);
-
   int num_schedules = 0;
+  int delays[num_delays];
+  time_t start_time, end_time;
+
+  for (int i=0; i<num_delays; i++)
+    delays[i] = i;
+
   cout << "Enumerating schedules with " << operations.size() << " operations "
-       << "and " << delays.size() << " delays..." << endl;
-  
+       << "and " << num_delays << " delays..." << endl;
+
+  time(&start_time);
   while (true) {
-    init_run();
-    int step;
     int d = 0;
 
-    cout << ++num_schedules << ". ";
+    init_run();
 
-    for (step=0; !sched.empty(); step++) {
-  
-      if (d < delays.size() && step == delays[d]) {
-        if (sched.size() == 1) {
-          for (int i=d; i<delays.size(); i++)
-            delays[i] = 9999;
-        } else {
-          // cout << "* ";
-          sched.push_back(sched.front());
-          sched.pop_front();
-        }
-        d++;
-        continue;
-      }
-      // cout << sched.front()->id << " ";
-      if (Resume(sched.front()->coroutine))
+    cout << ++num_schedules << ". ";
+    for (int step=0; !sched.empty(); step++) {
+      if (sched.size() > 1 && d < num_delays && delays[d] == step) {
+        cout << "* ";
+        sched.push_back(sched.front());
         sched.pop_front();
+        d++;
+      } else if (Resume(sched.front()->coroutine)) {
+        sched.pop_front();
+      }
     }
     cout << endl;
-    
-    int i;
-    for (i=d-1; i>=-1; i--) {
-      if (i >= 0 && delays[i] < step-2) {
-        delays[i]++;
-        for (int j=i+1; j<d; j++)
-          delays[j] = delays[j-1] + 1;
-        break;
-      }
-    }
-    if (i < 0)
-      break;
-  }
 
-  cout << num_schedules << " schedules enumerated." << endl;
+    if (d == 0) break;
+    
+    delays[d-1]++;
+    for (int i=d; i<num_delays; i++) {
+      delays[i] = delays[i-1] + 1;
+    }
+  }
+  time(&end_time);
+
+  cout << num_schedules << " schedules enumerated in "
+       << difftime(end_time,start_time) << "s." << endl;
   return 0;
 }
 
@@ -152,23 +144,36 @@ void set_alloc(int policy) {
 }
 
 deque<void*> free_pool;
+deque<void*> alloc_pool;
+
 void* my_malloc(int size) {
   void *x;
-  if (free_pool.empty())
+  if (free_pool.empty()) {
     x = malloc(size);
-  else {
+    alloc_pool.push_back(x);
+  } else {
     x = free_pool.front();
     free_pool.pop_front();
+    alloc_pool.push_back(x);
   }
   return x;
 }
+
 void my_free(void *x) {
   if (ALLOC == FIFO)
     free_pool.push_back(x);
   else if (ALLOC == LIFO)
     free_pool.push_front(x);
-  else
+  else {
     free(x);
+  }
+}
+
+void clear_alloc_pool() {
+  for (deque<void*>::iterator p = alloc_pool.begin(); p != alloc_pool.end(); ++p) {
+    my_free(*p);
+  }
+  alloc_pool.clear();
 }
 
 /*****************************************************************************/
@@ -197,6 +202,7 @@ void violin_init(void (*add_fn)(int), int (*rem_fn)(void)) {
   remove_function = rem_fn;
   scheduler_init();
   add_init_fn(reset_counters);
+  add_init_fn(clear_alloc_pool);
 }
 
 int violin_run(int num_delays) {

@@ -57,6 +57,6 @@ int main() {
   declare_operation(Remove,0);
   declare_operation(Remove,0);
   declare_operation(Remove,0);
-  violin_run(3);
+  violin_run(7);
   return 0;
 }
