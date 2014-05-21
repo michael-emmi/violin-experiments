@@ -247,6 +247,6 @@ int main() {
   declare_operation(Add,4);
   declare_operation(Remove,0);
   declare_operation(Remove,0);
-  violin_run(7);
+  violin_run(6);
   return 0;
 }

@@ -2,6 +2,7 @@
 #include <vector>
 #include <stack>
 #include <deque>
+#include <set>
 #include <map>
 #include <time.h>
 using namespace std;
@@ -144,36 +145,43 @@ void set_alloc(int policy) {
 }
 
 deque<void*> free_pool;
-deque<void*> alloc_pool;
+set<void*> alloc_set;
 
 void* my_malloc(int size) {
   void *x;
   if (free_pool.empty()) {
     x = malloc(size);
-    alloc_pool.push_back(x);
+    alloc_set.insert(x);
   } else {
     x = free_pool.front();
     free_pool.pop_front();
-    alloc_pool.push_back(x);
   }
   return x;
 }
 
 void my_free(void *x) {
+  if (alloc_set.find(x) == alloc_set.end())
+    return;
+
   if (ALLOC == FIFO)
     free_pool.push_back(x);
   else if (ALLOC == LIFO)
     free_pool.push_front(x);
   else {
     free(x);
+    alloc_set.erase(x);
   }
 }
 
 void clear_alloc_pool() {
-  for (deque<void*>::iterator p = alloc_pool.begin(); p != alloc_pool.end(); ++p) {
-    my_free(*p);
+  for (set<void*>::iterator p = alloc_set.begin(); p != alloc_set.end(); ) {
+    // Tricky tricky! can't free(*p) before ++p
+    void *ptr = *p;
+    ++p;
+    free(ptr);
   }
-  alloc_pool.clear();
+  alloc_set.clear();
+  free_pool.clear();
 }
 
 /*****************************************************************************/
