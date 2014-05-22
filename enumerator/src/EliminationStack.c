@@ -220,7 +220,7 @@ void Reset() {
 }
 
 void Push(int x) {
-	struct ThreadInfo *ti = (struct ThreadInfo*) my_malloc(sizeof(struct ThreadInfo));
+	struct ThreadInfo *ti = (struct ThreadInfo*) violin_malloc(sizeof(struct ThreadInfo));
   ti->id = ++unique_id;
 	ti->op = PUSH;
   ti->cell.pdata = x;
@@ -229,7 +229,7 @@ void Push(int x) {
 }
 
 int Pop() {
-	struct ThreadInfo *ti = (struct ThreadInfo*) my_malloc(sizeof(struct ThreadInfo));
+	struct ThreadInfo *ti = (struct ThreadInfo*) violin_malloc(sizeof(struct ThreadInfo));
   ti->id = ++unique_id;
   ti->op = POP;
   ti->spin = 1;
@@ -238,15 +238,6 @@ int Pop() {
 }
 
 int main() {
-  add_init_fn(Reset);
-  violin_init(Push,Pop);
-  set_alloc(FIFO);
-  declare_operation(Add,1);
-  declare_operation(Add,2);
-  declare_operation(Add,3);
-  declare_operation(Add,4);
-  declare_operation(Remove,0);
-  declare_operation(Remove,0);
-  violin_run(6);
+  violin(Reset,Push,4,Pop,2,FIFO,2,9);
   return 0;
 }

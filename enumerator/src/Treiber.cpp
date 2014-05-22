@@ -20,7 +20,7 @@ bool cas(struct cell **p, struct cell* t, struct cell *x) {
 
 void push (int v) {
   struct cell *t;
-  struct cell *x = (struct cell*) my_malloc(sizeof *x);
+  struct cell *x = (struct cell*) violin_malloc(sizeof *x);
   x->data = v;
 
   do {
@@ -42,21 +42,11 @@ int pop () {
     Yield();
   } while (!cas(&s,t,x));
   int data = t->data;
-  my_free(t);
+  violin_free(t);
   return data;
 }
 
 int main() {
-  add_init_fn(reset);
-  violin_init(push,pop);
-  set_alloc(FIFO);
-  declare_operation(Add,1);
-  declare_operation(Add,2);
-  declare_operation(Add,3);
-  declare_operation(Remove,0);
-  declare_operation(Remove,0);
-  declare_operation(Remove,0);
-  declare_operation(Remove,0);
-  violin_run(3);
+  violin(reset,push,3,pop,4,FIFO,0,3);
   return 0;
 }
