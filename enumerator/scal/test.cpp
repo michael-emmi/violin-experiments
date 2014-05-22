@@ -1,18 +1,9 @@
+// NOTE this is how I am compiling
+// clang++ -I./include -I./include/basekit -I./include/coroutine -I./scal
+// -I./scal/src -L./lib -lcoroutine -lgflags scal/test.cpp scal/src/util/*.o
+// -std=c++0x
+
 #include "violin.h"
-
-#ifndef SCAL_BENCHMARK_STD_PIPE_API_H_
-#define SCAL_BENCHMARK_STD_PIPE_API_H_
-
-#include <stdint.h>
-
-extern uint64_t g_num_threads;
-
-extern void* ds_new(void);
-extern bool ds_put(void *ds, uint64_t val);
-extern bool ds_get(void *ds, uint64_t *val);
-extern char* ds_get_stats(void);
-
-#endif  // SCAL_BENCHMARK_STD_PIPE_API_H_
 
 #include "datastructures/balancer_partrr.h"
 #include "datastructures/boundedsize_kfifo.h"
@@ -36,9 +27,49 @@ extern char* ds_get_stats(void);
 #include "datastructures/wf_queue_ppopp11.h"
 // #include "datastructures/wf_queue_ppopp12.h"
 
+extern uint64_t g_num_threads;
+int k = 2;
+int num_segments = 2;
+int num_queues = 2;
+int partitions = 2;
+int dequeue_mode = 0;
+int dequeue_timeout = 0;
+int num_ops = 2;
+int quasi_factor = 2;
+int max_retries = 2;
+int delay = 2;
+int helping_delay = 2;
+
 Pool<int> *obj;
-enum { BK_QUEUE, D_QUEUE, DTS_QUEUE, FC_QUEUE, LB_QUEUE, MS_QUEUE, K_STACK, RD_QUEUE, S_LIST, TR_STACK, TS_DEQUE, TS_QUEUE, TS_STACK, UK_QUEUE, WF_QUEUE_11, WF_QUEUE_12 };
 int violin_object;
+
+enum {
+  BK_QUEUE, D_QUEUE, DTS_QUEUE, FC_QUEUE, LB_QUEUE, MS_QUEUE, K_STACK,
+  RD_QUEUE, S_LIST, TR_STACK, TS_DEQUE, TS_QUEUE, TS_STACK, UK_QUEUE,
+  WF_QUEUE_11, WF_QUEUE_12
+};
+
+string obj_name() {
+  switch (violin_object) {
+  case BK_QUEUE: return "Bounded-size K FIFO";
+  case D_QUEUE: return "Distributed Queue";
+  case DTS_QUEUE: return "DTS Queue";
+  case FC_QUEUE: return "DTS Queue";
+  case K_STACK: return "K Stack";
+  case LB_QUEUE: return "Lock-based Queue";
+  case MS_QUEUE: return "MS Queue";
+  case RD_QUEUE: return "Random-dequeue Queue";
+  case S_LIST: return "Single List";
+  case TR_STACK: return "Treiber Stack";
+  case TS_DEQUE: return "TS Deque";
+  case TS_STACK: return "TS Stack";
+  case TS_QUEUE: return "TS Queue";
+  case UK_QUEUE: return "Unbounded-size K FIFO";
+  case WF_QUEUE_11: return "Wait-free Queue (2011)";
+  case WF_QUEUE_12: return "Wait-free Queue (2012)";
+  default: return "????";
+  }
+}
 
 int obj_order() {
   switch (violin_object) {
@@ -64,18 +95,6 @@ int obj_order() {
     return NO_ORDER;
   }
 }
-
-int k = 2;
-int num_segments = 2;
-int num_queues = 2;
-int partitions = 2;
-int dequeue_mode = 0;
-int dequeue_timeout = 0;
-int num_ops = 2;
-int quasi_factor = 2;
-int max_retries = 2;
-int delay = 2;
-int helping_delay = 2;
 
 Pool<int>* obj_create() {
   switch (violin_object) {
@@ -115,21 +134,17 @@ int obj_rem() {
 
 uint64_t g_num_threads;
 int main() {
-  // google::SetUsageMessage(usage);
-  // google::ParseCommandLineFlags(&argc, const_cast<char***>(&argv), true);
-  // uint64_t tlsize = scal::human_size_to_pages(FLAGS_prealloc_size.c_str(),
-  //                                             FLAGS_prealloc_size.size());
+  
+  // TODO are we initializing these correctly?
   uint64_t tlsize = 4;
-  // Init the main program as executing thread (may use rnd generator or tl
-  // allocs).
-  // g_num_threads = FLAGS_producers + FLAGS_consumers;
   g_num_threads = 4;
   scal::tlalloc_init(tlsize, true /* touch pages */);
   //threadlocals_init();
   scal::ThreadContext::prepare(g_num_threads + 1);
   scal::ThreadContext::assign_context();
 
-  // violin_object = BK_QUEUE;
+  // Choose some SCAL data structure...
+  violin_object = BK_QUEUE;
   // violin_object = D_QUEUE;
   // violin_object = DTS_QUEUE; // X -- segfault
   // violin_object = LB_QUEUE;
@@ -143,9 +158,10 @@ int main() {
   // violin_object = TS_QUEUE; // X -- mod after free (?)
   // violin_object = TS_STACK; // X -- mod after free (?)
   // violin_object = UK_QUEUE;
-  violin_object = WF_QUEUE_11;
+  // violin_object = WF_QUEUE_11;
   // violin_object = WF_QUEUE_12;
 
-  violin(obj_reset,obj_add,1,obj_rem,2,DEFAULT_ALLOC,obj_order(),0,1);
+  cout << "Running SCAL data structure: " << obj_name() << endl;
+  violin(obj_reset,obj_add,2,obj_rem,2,DEFAULT_ALLOC,obj_order(),0,5);
   return 0;
 }
