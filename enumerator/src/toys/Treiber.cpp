@@ -47,6 +47,6 @@ int pop () {
 }
 
 int main() {
-  violin(reset,push,3,pop,4,FIFO,0,3);
+  violin(reset,push,3,pop,4,LRF_ALLOC,LIFO_ORDER,0,3);
   return 0;
 }

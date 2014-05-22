@@ -1,21 +1,15 @@
-#include <stdbool.h>
-#include <stddef.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <stdio.h>
-#include <string.h>
-
 #include "violin.h"
 
+// calling __atomic_compare_exchange_n leads me to segmentation faults...
+// #define CAS(t,x,y,z) __atomic_compare_exchange_n(x,&(y),z,true,0,0)
+
+#define CAS(t,x,y,z) cas((void**) x, (void*) y, (void*) z)
 bool cas(void **p, void* t, void *x) {
   if (*p == t) {
     *p = x;
     return true;
   } else return false;
 }
-
-// #define CAS(t,x,y,z) __atomic_compare_exchange_n(x,&(y),z,true,0,0)
-#define CAS(t,x,y,z) cas((void**) x, (void*) y, (void*) z)
 
 #define LOCATION_ARRAY_SIZE 14
 #define COLLISION_ARRAY_SIZE 4
@@ -238,6 +232,6 @@ int Pop() {
 }
 
 int main() {
-  violin(Reset,Push,4,Pop,2,FIFO,2,9);
+  violin(Reset,Push,3,Pop,4,LRF_ALLOC,LIFO_ORDER,3,6);
   return 0;
 }

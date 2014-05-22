@@ -1,3 +1,38 @@
+/*****************************************************************************/
+/* VIOLIN: a detector of linearizability violations by schedule enumeration. */
+/*****************************************************************************
+ * Usage
+ * Just call the "violin" function, e.g.,
+ *
+ *   int main() {
+ *     violin(
+ *       init_fn,
+ *       add_fn, num_adds,
+ *       remove_fn, num_removes,
+ *       allocation_policy,
+ *       num_barriers, num_delays
+ *     );
+ *     return 0;
+ *   }
+ *
+ * Note that you must specify a few arguments:
+ * 1. void (*init_fn)(void)   for resetting your data to its initial state
+ * 2. void (*add_fn)(int)     for adding an element
+ * 3. int num_adds            how many add operations?
+ * 4. int (*remove_fn)(void)  for removing an element
+ * 5. int num_removes         how many remove operations?
+ * 6. int allocation_policy   from DEFAULT, FIFO, LIFO
+ * 7. int num_barriers        how many barriers?
+ * 8. int num_delays          how many delays?
+ *
+ * Once the "violin" function is called, every possible delay-bounded round
+ * robin schedule of `num_adds` add operations followed by `num_removes`
+ * remove operations with up to `num_delays` delays will be explored, and any
+ * linearizability violation observable with up to `num_barriers` barries
+ * witnessed by some execution will be reported.
+ *
+ *****************************************************************************/
+
 #include <iostream>
 #include <vector>
 #include <stack>
@@ -110,8 +145,8 @@ int search(int num_delays) {
 /** MEMORY ALLOCATION (TO CATCH ABA)                                        **/
 /*****************************************************************************/
 
-enum { DEFAULT, FIFO, LIFO };
-int alloc_policy;
+enum { DEFAULT_ALLOC, LRF_ALLOC, MRF_ALLOC };
+int violin_alloc_policy;
 
 deque<void*> free_pool;
 set<void*> alloc_set;
@@ -132,11 +167,14 @@ void violin_free(void *x) {
   if (alloc_set.find(x) == alloc_set.end())
     return;
 
-  if (alloc_policy == FIFO)
+  switch (violin_alloc_policy) {
+  case LRF_ALLOC:
     free_pool.push_back(x);
-  else if (alloc_policy == LIFO)
+    break;
+  case MRF_ALLOC:
     free_pool.push_front(x);
-  else {
+    break;
+  default:
     free(x);
     alloc_set.erase(x);
   }
@@ -192,6 +230,9 @@ int num_violations;
 
 void (*add_function)(int);
 int (*remove_function)(void);
+
+int violin_order;
+enum { NO_ORDER, LIFO_ORDER, FIFO_ORDER };
 
 typedef pair<int,int> interval;
 typedef map<interval,int> counter;
@@ -288,16 +329,28 @@ void print_counters() {
   cout << endl;
 }
 
-bool order_violation(bool stack_order, int u, int v) {
-  return u != v && is_removed(u) && is_removed(v)
-      && add_span(stack_order?u:v).second < add_span(stack_order?v:u).first
-      && remove_span(u).second < remove_span(v).first;
+// THREE barriers required to observe this one.
+bool order_violation(int u, int v) {
+  switch (violin_order) {
+  case LIFO_ORDER:
+    return u != v && is_removed(u) && is_removed(v)
+      && interval_before(add_span(u), add_span(v))
+      && interval_before(add_span(v), remove_span(u))
+      && interval_before(remove_span(u), remove_span(v));
+  case FIFO_ORDER:
+    return u != v && is_removed(u) && is_removed(v)
+      && interval_before(add_span(v), add_span(u))
+      && interval_before(add_span(u), remove_span(u))
+      && interval_before(remove_span(u), remove_span(v));
+  default:
+    return false;
+  }
 }
 
-bool order_violation(bool stack_order, int v) {
+bool order_violation(int v) {
   if (v == UNKNOWN_VAL || v == EMPTY_VAL || !is_removed(v)) return false;
   for (map<int,counter>::iterator i = added.begin(); i != added.end(); ++i) {
-    if (order_violation(stack_order,i->first,v))
+    if (order_violation(i->first,v))
       return true;
   }
   return false;
@@ -333,7 +386,7 @@ bool remove_empty_violation() {
 }
 
 void check_for_violations() {
-  if (remove_empty_violation()) {
+  if (violin_time >= 2 && remove_empty_violation()) {
     cout << "(Ev)";
     num_violations++;
   }
@@ -361,14 +414,16 @@ int Remove(int op_id, int v) {
 
   removed[UNKNOWN_VAL][make_pair(start_time,INFINITY)]--;
   removed[r][make_pair(start_time,violin_time)]++;
-  cout << op_id << ":Rem" << "!" << r << " ";
+  cout << op_id << ":Rem" << "!";
+  if (r == EMPTY_VAL) cout << "E"; else cout << r;
+  cout << " ";
 
   if (remove_violation(r)) {
     cout << "(Rv) ";
     num_violations++;
   }
 
-  if (order_violation(true,r)) {
+  if (start_time >= 3 && order_violation(true,r)) {
     cout << "(Ov)";
     num_violations++;
   }
@@ -390,7 +445,8 @@ void violin_add_threads() {
 int violin(void (*init_fn)(void),
     void (*add_fn)(int), int num_adds,
     int (*rem_fn)(void), int num_removes,
-    int policy,
+    int allocation_policy,
+    int container_order,
     int num_barriers, int num_delays) {
 
   register_pre(violin_reset_counters);
@@ -407,7 +463,8 @@ int violin(void (*init_fn)(void),
   for (int i=0; i<num_removes; i++)
     violin_operations.push_back(new Operation(Remove,0,0));
 
-  alloc_policy = policy;
+  violin_alloc_policy = allocation_policy;
+  violin_order = container_order;
 
   for (int i=0; i<num_barriers; i++)
     violin_operations.push_back(new Operation(Tick,0,0));
