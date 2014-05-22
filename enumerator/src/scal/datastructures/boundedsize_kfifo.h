@@ -201,18 +201,23 @@ bool BoundedSizeKFifo<T>::dequeue(T *item) {
   while (true) {
     head_old = *head_;
     tail_old = *tail_;
+    Yield();
     find_index(head_old.value(), false, &item_index, &old_item);
     if (head_old.raw() == head_->raw()) {
+      Yield();
       if (item_index != kNoIndexFound) {
+        Yield();
         if (head_old.value() == tail_old.value()) {
           advance_tail(tail_old);
         }
         AtomicValue<T> newcp((T)NULL, old_item.aba() + 1);
+        Yield();
         if (queue_[item_index]->cas(old_item, newcp)) {
           *item = old_item.value();
           return true;
         }
       } else {
+        Yield();
         if (head_old.value() == tail_old.value()
             && tail_old.value() == tail_->value()) {
           return false;
@@ -236,17 +241,23 @@ bool BoundedSizeKFifo<T>::enqueue(T item) {
   while (true) {
     tail_old = *tail_;
     head_old = *head_;
+    Yield();
     find_index(tail_old.value(), true, &item_index, &old_item);
     if (tail_old.raw() == tail_->raw()) {
+      Yield();
       if (item_index != kNoIndexFound) {
         AtomicValue<T> newcp(item, old_item.aba() + 1);
+        Yield();
         if (queue_[item_index]->cas(old_item, newcp)) {
+          Yield();
           if (committed(tail_old.value(), &newcp, item_index)) {
             return true;
           }
         }
       } else {
+        Yield();
         if (queue_full(head_old.value(), tail_old.value())) {
+          Yield();
           if (segment_not_empty(head_old.value()) &&
               head_old.value() == head_->value()) {
             return false;

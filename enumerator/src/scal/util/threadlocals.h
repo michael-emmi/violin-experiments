@@ -8,7 +8,7 @@
 #include <pthread.h>
 #include <stdint.h>
 
-#include "src/util/random.h"
+#include "util/random.h"
 
 namespace scal {
 

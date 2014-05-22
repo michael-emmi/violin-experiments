@@ -162,6 +162,6 @@ int main() {
   // violin_object = WF_QUEUE_12;
 
   cout << "Running SCAL data structure: " << obj_name() << endl;
-  violin(obj_reset,obj_add,2,obj_rem,2,DEFAULT_ALLOC,obj_order(),0,5);
+  violin(obj_reset,obj_add,2,obj_rem,2,DEFAULT_ALLOC,obj_order(),3,7);
   return 0;
 }
