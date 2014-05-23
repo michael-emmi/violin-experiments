@@ -12,10 +12,11 @@ LIBS += -lgflags
 LIB_OBJS = $(patsubst %.cc,%.o,$(wildcard util/*.cc))
 LIBS += $(LIB_OBJS)
 
-EXE = scal-test
+MAIN = scal.cpp
+EXE = $(basename $(MAIN))
 
-$(EXE): $(LIB_OBJS) $(ROOT)/lib/libcoroutine.$(A) test.cpp
-	$(CC) $(CCFLAGS) $(INCLUDE) $(LIBS) test.cpp -o $@
+$(EXE): $(LIB_OBJS) $(ROOT)/lib/libcoroutine.$(A) $(MAIN)
+	$(CC) $(CCFLAGS) $(INCLUDE) $(LIBS) $(MAIN) -o $@
 
 util/%.o: util/%.cc
 	$(CC) -c $(CCFLAGS) $(INCLUDE) $<
