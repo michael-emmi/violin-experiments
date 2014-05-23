@@ -1,5 +1,6 @@
 ROOT = ../..
 CC = clang++
+A = a
 CCFLAGS = -std=c++0x
 INCLUDE = -I.
 INCLUDE += -I$(ROOT)/include
@@ -19,8 +20,11 @@ util/%.o: util/%.cc
 	$(CC) -c $(CCFLAGS) $(INCLUDE) $<
 	mv $(@F) util
 
-$(EXE): $(LIB_OBJS)
+$(EXE): $(LIB_OBJS) $(ROOT)/lib/libcoroutine.$(A)
 	$(CC) $(CCFLAGS) $(INCLUDE) $(LIBS) test.cpp -o $@
+
+$(ROOT)/lib/libcoroutine.$(A):
+	cd $(ROOT) && make lib/libcoroutine.$(A)
 
 clean:
 	rm -rf $(EXE)
