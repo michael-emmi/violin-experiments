@@ -1,7 +1,5 @@
-// NOTE this is how I am compiling
-// clang++ -I./include -I./include/basekit -I./include/coroutine -I./scal
-// -I./scal/src -L./lib -lcoroutine -lgflags scal/test.cpp scal/src/util/*.o
-// -std=c++0x
+#include <gflags/gflags.h>
+#include <sstream>
 
 #include "violin.h"
 
@@ -49,54 +47,33 @@ enum {
   WF_QUEUE_11, WF_QUEUE_12
 };
 
-string obj_name() {
-  switch (violin_object) {
-  case BK_QUEUE: return "Bounded-size K FIFO";
-  case D_QUEUE: return "Distributed Queue";
-  case DTS_QUEUE: return "DTS Queue";
-  case FC_QUEUE: return "DTS Queue";
-  case K_STACK: return "K Stack";
-  case LB_QUEUE: return "Lock-based Queue";
-  case MS_QUEUE: return "MS Queue";
-  case RD_QUEUE: return "Random-dequeue Queue";
-  case S_LIST: return "Single List";
-  case TR_STACK: return "Treiber Stack";
-  case TS_DEQUE: return "TS Deque";
-  case TS_STACK: return "TS Stack";
-  case TS_QUEUE: return "TS Queue";
-  case UK_QUEUE: return "Unbounded-size K FIFO";
-  case WF_QUEUE_11: return "Wait-free Queue (2011)";
-  case WF_QUEUE_12: return "Wait-free Queue (2012)";
-  default: return "????";
-  }
-}
+struct obj_desc {
+  int id;
+  int order;
+  string short_name;
+  string long_name;
+};
 
-int obj_order() {
-  switch (violin_object) {
-  case BK_QUEUE:
-  case D_QUEUE:
-  case DTS_QUEUE:
-  case FC_QUEUE:
-  case LB_QUEUE:
-  case MS_QUEUE:
-  case RD_QUEUE:
-  case S_LIST:
-  case TS_QUEUE:
-  case UK_QUEUE:
-  case WF_QUEUE_11:
-  case WF_QUEUE_12:
-    return FIFO_ORDER;
-  case K_STACK:
-  case TR_STACK:
-  case TS_STACK:
-    return LIFO_ORDER;
-  case TS_DEQUE:
-  default:
-    return NO_ORDER;
-  }
-}
+obj_desc objects[] = {
+  { .id = BK_QUEUE, .order = FIFO_ORDER, .short_name = "bkq", .long_name = "Bounded-size K FIFO" },
+  { .id = D_QUEUE, .order = FIFO_ORDER, .short_name = "dq", .long_name = "Distributed Queue" },
+  { .id = DTS_QUEUE, .order = FIFO_ORDER, .short_name = "dtsq", .long_name = "DTS Queue" },
+  { .id = FC_QUEUE, .order = FIFO_ORDER, .short_name = "fcq", .long_name = "FC Queue" },
+  { .id = K_STACK, .order = LIFO_ORDER, .short_name = "ks", .long_name = "K Stack" },
+  { .id = LB_QUEUE, .order = FIFO_ORDER, .short_name = "lbq", .long_name = "Lock-based Queue" },
+  { .id = MS_QUEUE, .order = FIFO_ORDER, .short_name = "msq", .long_name = "MS Queue" },
+  { .id = RD_QUEUE, .order = FIFO_ORDER, .short_name = "rdq", .long_name = "Random-dequeue Queue" },
+  { .id = S_LIST, .order = FIFO_ORDER, .short_name = "sl", .long_name = "Single List" },
+  { .id = TR_STACK, .order = LIFO_ORDER, .short_name = "ts", .long_name = "Treiber Stack" },
+  { .id = TS_DEQUE, .order = NO_ORDER, .short_name = "tsd", .long_name = "TS Deque" },
+  { .id = TS_STACK, .order = LIFO_ORDER, .short_name = "tss", .long_name = "TS Stack" },
+  { .id = TS_QUEUE, .order = FIFO_ORDER, .short_name = "tsq", .long_name = "TS Queue" },
+  { .id = UK_QUEUE, .order = FIFO_ORDER, .short_name = "ukq", .long_name = "Unbounded-size K FIFO" },
+  { .id = WF_QUEUE_11, .order = FIFO_ORDER, .short_name = "wfq11", .long_name = "Wait-free Queue (2011)" },
+  { .id = WF_QUEUE_12, .order = FIFO_ORDER, .short_name = "wfq12", .long_name = "Wait-free Queue (2012)" },
+};
 
-Pool<int>* obj_create() {
+Pool<int>* obj_create(int id) {
   switch (violin_object) {
   case BK_QUEUE: return new BoundedSizeKFifo<int>(k, num_segments);
   case D_QUEUE: return new DistributedQueue< int, MSQueue<int> >(num_queues,g_num_threads+1,new BalancerPartitionedRoundRobin(partitions,num_queues));
@@ -119,23 +96,80 @@ Pool<int>* obj_create() {
   }
 }
 
+int obj_id(string name) {
+  int len = sizeof(objects) / sizeof(obj_desc);
+  for (int i=0; i<len; i++)
+    if (objects[i].short_name == name) {
+      return objects[i].id;
+    }
+  return -1;
+}
+
+string obj_name(int id) {
+  int len = sizeof(objects) / sizeof(obj_desc);
+  for (int i=0; i<len; i++)
+    if (objects[i].id == id)
+      return objects[i].long_name;
+  return "????";
+}
+
+int obj_order(int id) {
+  int len = sizeof(objects) / sizeof(obj_desc);
+  for (int i=0; i<len; i++)
+    if (objects[i].id == id)
+      return objects[i].order;
+  return NO_ORDER;
+}
+
 void obj_reset() {
   if (obj) delete obj;
-  obj = obj_create();
+  obj = obj_create(violin_object);
 }
+
 void obj_add(int v) {
   obj->put(v);
 }
+
 int obj_rem() {
   int result;
   obj->get(&result);
   return result;
 }
 
+DEFINE_int32(adds, 1, "how many add operations?");
+DEFINE_int32(removes, 1, "how many remove operations?");
+DEFINE_int32(barriers, 0, "how many barriers?");
+DEFINE_int32(delays, 0, "how many delays?");
+DEFINE_int32(alloc, 0, "allocation policy? 0=default, 1=LRF, 2=MRF");
+
 uint64_t g_num_threads;
-int main() {
-  
+
+int main(int argc, char **argv) {
+
+  stringstream usage;
+  usage << "usage" << endl;
+  usage << "  " << argv[0] << " [flags] OBJ, where OBJ comes from:" << endl;
+  int len = sizeof(objects) / sizeof(obj_desc);
+  for (int i=0; i<len; i++) {
+    usage << "    " << objects[i].short_name << " -> " << objects[i].long_name << endl;
+  }
+  usage << "  then see the flags below.";
+
+  google::SetUsageMessage(usage.str());
+  google::ParseCommandLineFlags(&argc, &argv, true);
+
+  if (argc-1 != 1) {
+    cerr << "Must specify one data structure; see --help for usage." << endl;
+    exit(-1);
+  }
+
+  if ((violin_object = obj_id(argv[1])) < 0) {
+    cerr << "Invalid data structure name \"" << argv[1] << "\"; see --help for usage." << endl;
+    exit(-1);
+  }
+
   // TODO are we initializing these correctly?
+  // TODO investigate!
   uint64_t tlsize = 4;
   g_num_threads = 4;
   scal::tlalloc_init(tlsize, true /* touch pages */);
@@ -143,25 +177,15 @@ int main() {
   scal::ThreadContext::prepare(g_num_threads + 1);
   scal::ThreadContext::assign_context();
 
-  // Choose some SCAL data structure...
-  violin_object = BK_QUEUE;
-  // violin_object = D_QUEUE;
-  // violin_object = DTS_QUEUE; // X -- segfault
-  // violin_object = LB_QUEUE;
-  // violin_object = MS_QUEUE;
-  // violin_object = FC_QUEUE;
-  // violin_object = K_STACK; // X -- mod after free (?)
-  // violin_object = RD_QUEUE;
-  // violin_object = S_LIST; // NOTE: he's returning 0 for EMPTY!
-  // violin_object = TR_STACK;
-  // violin_object = TS_DEQUE; // X -- mod after free (?)
-  // violin_object = TS_QUEUE; // X -- mod after free (?)
-  // violin_object = TS_STACK; // X -- mod after free (?)
-  // violin_object = UK_QUEUE;
-  // violin_object = WF_QUEUE_11;
-  // violin_object = WF_QUEUE_12;
-
-  cout << "Running SCAL data structure: " << obj_name() << endl;
-  violin(obj_reset,obj_add,2,obj_rem,2,DEFAULT_ALLOC,obj_order(),3,7);
+  cout << "Running SCAL data structure: " << obj_name(violin_object) << endl;
+  violin(
+    obj_reset,
+    obj_add, FLAGS_adds,
+    obj_rem, FLAGS_removes,
+    FLAGS_alloc,
+    obj_order(violin_object),
+    FLAGS_barriers,
+    FLAGS_delays
+  );
   return 0;
 }

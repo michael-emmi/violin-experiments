@@ -14,14 +14,12 @@ LIBS += $(LIB_OBJS)
 
 EXE = scal-test
 
-top: $(EXE)
+$(EXE): $(LIB_OBJS) $(ROOT)/lib/libcoroutine.$(A) test.cpp
+	$(CC) $(CCFLAGS) $(INCLUDE) $(LIBS) test.cpp -o $@
 
 util/%.o: util/%.cc
 	$(CC) -c $(CCFLAGS) $(INCLUDE) $<
 	mv $(@F) util
-
-$(EXE): $(LIB_OBJS) $(ROOT)/lib/libcoroutine.$(A)
-	$(CC) $(CCFLAGS) $(INCLUDE) $(LIBS) test.cpp -o $@
 
 $(ROOT)/lib/libcoroutine.$(A):
 	cd $(ROOT) && make lib/libcoroutine.$(A)
