@@ -1,4 +1,5 @@
 *.lib
+!Makefile.lib
 *.dll
 *.manifest
 *.obj
