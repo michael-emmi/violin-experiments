@@ -132,8 +132,10 @@ void obj_add(int v) {
 
 int obj_rem() {
   int result;
-  obj->get(&result);
-  return result;
+  if (obj->get(&result))
+    return result;
+  else
+    return -1;
 }
 
 DEFINE_int32(adds, 1, "how many add operations?");
