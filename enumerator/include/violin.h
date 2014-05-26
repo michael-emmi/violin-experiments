@@ -10,6 +10,7 @@
  *       add_fn, num_adds,
  *       remove_fn, num_removes,
  *       allocation_policy,
+ *       container_order,
  *       num_barriers, num_delays
  *     );
  *     return 0;
@@ -21,9 +22,10 @@
  * 3. int num_adds            how many add operations?
  * 4. int (*remove_fn)(void)  for removing an element
  * 5. int num_removes         how many remove operations?
- * 6. int allocation_policy   from DEFAULT, FIFO, LIFO
- * 7. int num_barriers        how many barriers?
- * 8. int num_delays          how many delays?
+ * 6. int allocation_policy   from DEFAULT_ALLOC, LRF_ALLOC, MRF_ALLOC
+ * 7. int container_order     from NO_ORDER, LIFO_ORDER, FIFO_ORDER
+ * 8. int num_barriers        how many barriers?
+ * 9. int num_delays          how many delays?
  *
  * Once the "violin" function is called, every possible delay-bounded round
  * robin schedule of `num_adds` add operations followed by `num_removes`
@@ -94,7 +96,7 @@ int search(int num_delays) {
   time_t start_time, end_time;
 
   scheduler = Coro_new();
-	Coro_initializeMainCoro(scheduler);
+  Coro_initializeMainCoro(scheduler);
 
   for (int i=0; i<num_delays; i++)
     delays[i] = i;
