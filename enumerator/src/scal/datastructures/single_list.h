@@ -41,6 +41,7 @@ SingleList<T>::SingleList() {
 
 template<typename T>
 bool SingleList<T>::is_empty() const {
+  //Yield();
   if (head_ == tail_) {
     return true;
   } else {
@@ -52,7 +53,9 @@ template<typename T>
 bool SingleList<T>::enqueue(T item) {
   Node<T> *n = scal::tlget<Node<T> >(0);
   n->value = item;
+  //Yield();
   tail_->next = n;
+  //Yield();
   tail_ = n;
   return true;
 }
@@ -60,11 +63,15 @@ bool SingleList<T>::enqueue(T item) {
 template<typename T>
 bool SingleList<T>::dequeue(T *item) {
   if (head_ == tail_) {
+    Yield();
     *item = (T)NULL;
     return false;
   } else {
+    //Yield(); 
     *item = head_->next->value;
+    Yield();
     head_ = head_->next;
+    //Yield(); //without this yield it finds less violations; for 2d1a2r goes from 10 to 8
     return true;
   }
 }
