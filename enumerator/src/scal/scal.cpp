@@ -142,8 +142,9 @@ DEFINE_int32(adds, 1, "how many add operations?");
 DEFINE_int32(removes, 1, "how many remove operations?");
 DEFINE_int32(barriers, 0, "how many barriers?");
 DEFINE_int32(delays, 0, "how many delays?");
-DEFINE_int32(mode, 1, "mode? 0=nothing, 1=counting, 2=linearizations");
+DEFINE_string(mode, "counting", "which mode? {nothing,counting,linearization}");
 DEFINE_int32(alloc, 0, "allocation policy? 0=default, 1=LRF, 2=MRF");
+DEFINE_string(show, "all", "show which histories? {all,violations,none}");
 
 uint64_t g_num_threads;
 
@@ -181,11 +182,12 @@ int main(int argc, char **argv) {
   scal::ThreadContext::assign_context();
 
   violin_mode_t mode;
-  switch (FLAGS_mode) {
-  case 0: mode = NOTHING_MODE; break;
-  case 1: mode = COUNTING_MODE; break;
-  default: mode = LINEARIZATIONS_MODE; break;
-  }
+  if (FLAGS_mode.find("no") != string::npos)
+    mode = NOTHING_MODE;
+  else if (FLAGS_mode.find("lin") != string::npos)
+    mode = LINEARIZATIONS_MODE;
+  else
+    mode = COUNTING_MODE;
 
   violin_alloc_policy_t alloc;
   switch (FLAGS_alloc) {
@@ -193,6 +195,14 @@ int main(int argc, char **argv) {
   case 1: alloc = LRF_ALLOC; break;
   default: alloc = MRF_ALLOC; break;
   }
+
+  violin_show_t show;
+  if (FLAGS_show.find("none") != string::npos)
+    show = SHOW_NONE;
+  else if (FLAGS_show.find("viol") != string::npos)
+    show = SHOW_VIOLATIONS;
+  else
+    show = SHOW_ALL;
 
   cout << "Running SCAL data structure: " << obj_name(violin_object) << endl;
   violin(
@@ -203,7 +213,8 @@ int main(int argc, char **argv) {
     alloc,
     obj_order(violin_object),
     FLAGS_barriers,
-    FLAGS_delays
+    FLAGS_delays,
+    show
   );
   return 0;
 }

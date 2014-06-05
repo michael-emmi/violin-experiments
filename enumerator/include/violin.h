@@ -94,9 +94,7 @@ void register_post(void (*fn)()) {
 }
 
 int search(int num_delays) {
-  int num_schedules = 0;
   int delays[num_delays];
-  time_t start_time, end_time;
 
   scheduler = Coro_new();
   Coro_initializeMainCoro(scheduler);
@@ -104,21 +102,14 @@ int search(int num_delays) {
   for (int i=0; i<num_delays; i++)
     delays[i] = i;
 
-  time(&start_time);
   while (true) {
     int d = 0;
 
     for (vector<void(*)()>::iterator i = pre.begin(); i != pre.end(); ++i)
       (*i)();
 
-    if (num_schedules == 0)
-      cout << "Enumerating schedules with " << schedule.size() << " threads "
-           << "and " << num_delays << " delays..." << endl;
-
-    cout << ++num_schedules << ". ";
     for (int step=0; !schedule.empty(); step++) {
       if (schedule.size() > 1 && d < num_delays && delays[d] == step) {
-        cout << "* ";
         schedule.push_back(schedule.front());
         schedule.pop_front();
         d++;
@@ -130,8 +121,6 @@ int search(int num_delays) {
     for (vector<void(*)()>::iterator i = post.begin(); i != post.end(); ++i)
       (*i)();
 
-    cout << endl;
-
     if (d == 0) break;
     
     delays[d-1]++;
@@ -139,10 +128,6 @@ int search(int num_delays) {
       delays[i] = delays[i-1] + 1;
     }
   }
-  time(&end_time);
-
-  cout << num_schedules << " schedules enumerated in "
-       << difftime(end_time,start_time) << "s." << endl;
   return 0;
 }
 
@@ -227,10 +212,29 @@ void Operation::run(void *context)  {
 /*****************************************************************************/
 
 vector<Operation*> violin_operations;
-int violin_time;
+stringstream hout;
+bool deterministic_monitor;
+bool return_happened, violation_happened;
+int absolute_time, relative_time, time_bound;
+
+void increment_time() {
+  absolute_time++;
+
+  if (relative_time < time_bound) {
+    relative_time++;
+  } else {
+    // shift everything...
+  }
+}
+
+int current_time() {
+  return relative_time;
+}
+
 const int INFINITY = 9999;
 const int EMPTY_VAL = -1;
 const int UNKNOWN_VAL = -2;
+int num_executions;
 int num_violations;
 
 void (*add_function)(int);
@@ -291,12 +295,6 @@ pair<int,int> remove_span(int v) {
   for (counter::iterator i = removed[v].begin(); i != removed[v].end(); ++i)
     if (i->second > 0) s = interval_union(s,i->first);
   return s;
-}
-
-void violin_reset_counters() {
-  violin_time = 0;
-  added.clear();
-  removed.clear();
 }
 
 void print_counters() {
@@ -391,22 +389,21 @@ bool remove_empty_violation() {
 }
 
 void check_for_violations() {
-  if (violin_time >= 2 && remove_empty_violation()) {
-    cout << "(Ev)";
+  if (current_time() >= 2 && remove_empty_violation()) {
+    hout << "(Ev)";
     num_violations++;
+    violation_happened = true;
   }
 }
 
 struct OP {
   int id;
-  static int unique_id;
   int start;
   int finish;
   bool operator< (const OP& o) const {
     return id < o.id;
   }
 };
-int OP::unique_id = 0;
 multiset<OP> operations;
 
 void compute_linearizations() {
@@ -447,107 +444,130 @@ void compute_linearizations() {
     }
   }
 
-  cout << "(" << linearizations.size() << "ls) ";
+  hout << "(" << linearizations.size() << "Ls) ";
 
   // cout << endl;
   // for (vector< vector<OP> >::iterator lin = linearizations.begin(); lin != linearizations.end(); ++lin) {
   //   for (vector<OP>::iterator o = lin->begin(); o != lin->end(); ++o)
-  //     cout << o->id << " ";
+  //     cout << o->id << "(" << o->start << "," << o->finish << ")";
   //   cout << endl;
   // }
 }
 
-void linearizations_pre() {
-  operations.clear();
-  OP::unique_id = 0;
-}
-void linearizations_post() {
-  compute_linearizations();
-}
 
 enum violin_mode_t { NOTHING_MODE, COUNTING_MODE, LINEARIZATIONS_MODE  };
 violin_mode_t violin_mode;
 
+enum violin_show_t { SHOW_NONE, SHOW_VIOLATIONS, SHOW_ALL };
+violin_show_t show_histories;
+
 int Add(int op_id, int v) {
-  int start_time = violin_time;
+
+  if (deterministic_monitor && return_happened) {
+    increment_time();
+    return_happened = false;
+  }
+
+  int start_time = current_time();
 
   switch (violin_mode) {
   case COUNTING_MODE:
     added[v][make_pair(start_time,INFINITY)]++;
     break;
   case LINEARIZATIONS_MODE:
-    operations.insert({.id = OP::unique_id++, .start = start_time, .finish = 9999});
+    operations.insert({.id = op_id, .start = start_time, .finish = INFINITY});
     break;
   case NOTHING_MODE:
     break;
   }
 
-  cout << op_id << ":Add(" << v << ")? ";
+  hout << op_id << ":Add(" << v << ")? ";
 
   add_function(v);
 
-  cout << op_id << ":Add! ";
+  hout << op_id << ":Add! ";
+
+  int end_time = current_time();
 
   switch (violin_mode) {
   case COUNTING_MODE:
     added[v][make_pair(start_time,INFINITY)]--;
-    added[v][make_pair(start_time,violin_time)]++;
+    added[v][make_pair(start_time,end_time)]++;
     break;
   case LINEARIZATIONS_MODE:
+    operations.erase({.id = op_id, .start = start_time, .finish = INFINITY});
+    operations.insert({.id = op_id, .start = start_time, .finish = end_time});
+    break;
   case NOTHING_MODE:
     break;
   }
+
+  return_happened = true;
 
   return 0;
 }
 
 int Remove(int op_id, int v) {
-  int start_time = violin_time;
+
+  if (deterministic_monitor && return_happened) {
+    increment_time();
+    return_happened = false;
+  }
+
+  int start_time = current_time();
 
   switch (violin_mode) {
   case COUNTING_MODE:
     removed[UNKNOWN_VAL][make_pair(start_time,INFINITY)]++;
     break;
   case LINEARIZATIONS_MODE:
-    operations.insert({.id = OP::unique_id++, .start = start_time, .finish = 9999});
+    operations.insert({.id = op_id, .start = start_time, .finish = INFINITY});
     break;
   case NOTHING_MODE:
     break;
   }
 
-  cout << op_id << ":Rem? ";
+  hout << op_id << ":Rem? ";
 
   int r = remove_function();
 
-  cout << op_id << ":Rem" << "!";
-  if (r == EMPTY_VAL) cout << "E"; else cout << r;
-  cout << " ";
+  hout << op_id << ":Rem" << "!";
+  if (r == EMPTY_VAL) hout << "E"; else hout << r;
+  hout << " ";
+
+  int end_time = current_time();
 
   switch (violin_mode) {
   case COUNTING_MODE:
     removed[UNKNOWN_VAL][make_pair(start_time,INFINITY)]--;
-    removed[r][make_pair(start_time,violin_time)]++;
+    removed[r][make_pair(start_time,end_time)]++;
     if (remove_violation(r)) {
-      cout << "(Rv) ";
+      hout << "(Rv) ";
       num_violations++;
+      violation_happened = true;
     }
     if (start_time >= 3 && order_violation(true,r)) {
-      cout << "(Ov)";
+      hout << "(Ov)";
       num_violations++;
+      violation_happened = true;
     }
     break;
   case LINEARIZATIONS_MODE:
+    operations.erase({.id = op_id, .start = start_time, .finish = INFINITY});
+    operations.insert({.id = op_id, .start = start_time, .finish = end_time});
     break;
   case NOTHING_MODE:
     break;
   }
+
+  return_happened = true;
 
   return r;
 }
 
 int Tick(int op_id, int v) {
-  cout << "|B| ";
-  violin_time++;
+  hout << "|B| ";
+  increment_time();
   return 0;
 }
 
@@ -556,21 +576,67 @@ void violin_add_threads() {
     register_thread((*op)->coroutine, (*op)->run, (void*) *op);
 }
 
+void violin_pre() {
+  absolute_time = 0;
+  relative_time = 0;
+  return_happened = false;
+  violation_happened = false;
+
+  switch (violin_mode) {
+  case COUNTING_MODE:
+    added.clear();
+    removed.clear();
+    break;
+  case LINEARIZATIONS_MODE:
+    operations.clear();
+    break;
+  case NOTHING_MODE:
+    break;
+  }
+}
+
+void violin_post() {
+  num_executions++;
+
+  switch (violin_mode) {
+  case COUNTING_MODE:
+    check_for_violations();
+    break;
+  case LINEARIZATIONS_MODE:
+    compute_linearizations();
+    break;
+  case NOTHING_MODE:
+    break;
+  }
+
+  if (show_histories == SHOW_ALL ||
+      (show_histories == SHOW_VIOLATIONS && violation_happened)) {
+
+    cout << num_executions << ". " << hout.str() << endl;
+
+    hout.str("");
+    hout.clear();
+  }
+}
+
 int violin(void (*init_fn)(void),
     void (*add_fn)(int), int num_adds,
     int (*rem_fn)(void), int num_removes,
     violin_mode_t mode,
     violin_alloc_policy_t allocation_policy,
     violin_order_t container_order,
-    int num_barriers, int num_delays) {
+    int num_barriers, int num_delays,
+    violin_show_t show) {
 
-  register_pre(violin_reset_counters);
-  register_pre(linearizations_pre);
   register_pre(violin_clear_alloc_pool);
   register_pre(violin_add_threads);
+  register_pre(violin_pre);
   register_pre(init_fn);
-  register_post(check_for_violations);
-  register_post(linearizations_post);
+  register_post(violin_post);
+
+  deterministic_monitor = true;
+  show_histories = show;
+  time_bound = (mode == COUNTING_MODE) ? num_barriers : INFINITY;
 
   add_function = add_fn;
   for (int i=0; i<num_adds; i++)
@@ -587,7 +653,15 @@ int violin(void (*init_fn)(void),
   for (int i=0; i<num_barriers; i++)
     violin_operations.push_back(new Operation(Tick,0,0));
 
+  time_t start_time, end_time;
+  time(&start_time);
+  cout << "Enumerating schedules with "
+       << num_adds + num_removes + num_barriers << " threads "
+       << "and " << num_delays << " delays..." << endl;
   search(num_delays);
+  time(&end_time);
+  cout << num_executions << " schedules enumerated in "
+       << difftime(end_time,start_time) << "s." << endl;
   cout << "Found " << num_violations << " violations." << endl;
   return 0;
 }
