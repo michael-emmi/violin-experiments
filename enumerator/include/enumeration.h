@@ -31,13 +31,22 @@ bool Resume(Coro *c) {
 struct Thread {
   Coro *coro;
   void (*run)(void*);
-  void *arg;
+  void *obj;
+  static void execute(void*);
 };
+
+void Thread::execute(void* context) {
+  Thread *t = (Thread*) context;
+  Yield();
+  t->run(t->obj);
+  Complete();
+}
+
 vector<Thread> threads;
 vector<void(*)()> pre_listeners, delay_listeners, post_listeners;
 
-void register_thread(Coro *c, void (*run)(void*), void *arg) {
-  threads.push_back({.coro = c, .run = run, .arg = arg});
+void register_thread(void (*run)(void*), void *obj) {
+  threads.push_back({.coro = Coro_new(), .run = run, .obj = obj});
 }
 void register_pre(void (*fn)()) {
   pre_listeners.push_back(fn);
@@ -69,7 +78,7 @@ int search(int num_delays) {
 
     for (vector<Thread>::iterator t = threads.begin(); t != threads.end(); ++t) {
       schedule.push_back(t->coro);
-      Coro_startCoro_(scheduler, current = t->coro, t->arg, t->run);
+      Coro_startCoro_(scheduler, current = t->coro, &(*t), &Thread::execute);
     }
 
     notify(pre_listeners);

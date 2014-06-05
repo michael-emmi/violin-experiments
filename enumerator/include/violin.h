@@ -87,20 +87,19 @@ struct Operation {
   Operation(int(*f)(int,int), int p, int r)
     : proc(f), parameter(p), result(r) {
     id = unique_id++;
-    coroutine = Coro_new();
   }
   static int unique_id;
   int id;
   int start_time, end_time;
   int (*proc)(int,int);
   int parameter, result;
-  Coro *coroutine;
   static void run(void *context);
 };
+
 int Operation::unique_id = 0;
+
 void Operation::run(void *context)  {
   Operation *op = (Operation*) context;
-  Yield();
   if (deterministic_monitor && return_happened) {
     increment_time();
     return_happened = false;
@@ -110,7 +109,6 @@ void Operation::run(void *context)  {
   op->result = op->proc(op->id,op->parameter);
   op->end_time = current_time();
   return_happened = true;
-  Complete();
 }
 
 vector<Operation*> violin_operations;
@@ -235,7 +233,7 @@ int violin(void (*init_fn)(void),
 
   for (vector<Operation*>::iterator op = violin_operations.begin();
       op != violin_operations.end(); ++op)
-    register_thread((*op)->coroutine, (*op)->run, (void*) *op);
+    register_thread(&Operation::run, (void*) *op);
 
   time_t start_time, end_time;
   time(&start_time);
