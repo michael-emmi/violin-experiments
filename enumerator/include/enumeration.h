@@ -24,10 +24,6 @@ bool Resume(Coro *c) {
   return completed;
 }
 
-/*****************************************************************************/
-/** SCHEDULE EXPLORATION                                                    **/
-/*****************************************************************************/
-
 struct Thread {
   Coro *coro;
   void (*run)(void*);
@@ -41,6 +37,10 @@ void Thread::execute(void* context) {
   t->run(t->obj);
   Complete();
 }
+
+/*****************************************************************************/
+/** SCHEDULE EXPLORATION                                                    **/
+/*****************************************************************************/
 
 vector<Thread> threads;
 vector<void(*)()> pre_listeners, delay_listeners, post_listeners;
