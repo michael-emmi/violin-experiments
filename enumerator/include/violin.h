@@ -123,16 +123,8 @@ int (*remove_function)(void);
 
 int Add(int op_id, int v) {
   int start_time = current_time();
-
-  switch (violin_mode) {
-  case COUNTING_MODE:
-    added[v][make_pair(start_time,INFINITY)]++;
-    break;
-  case LINEARIZATIONS_MODE:
-    break;
-  case NOTHING_MODE:
-    break;
-  }
+  if (violin_mode == COUNTING_MODE)
+    count(ADD_OP, v, start_time);
 
   hout << op_id << ":Add(" << v << ")? ";
 
@@ -142,32 +134,15 @@ int Add(int op_id, int v) {
 
   int end_time = current_time();
 
-  switch (violin_mode) {
-  case COUNTING_MODE:
-    added[v][make_pair(start_time,INFINITY)]--;
-    added[v][make_pair(start_time,end_time)]++;
-    break;
-  case LINEARIZATIONS_MODE:
-    break;
-  case NOTHING_MODE:
-    break;
-  }
-
+  if (violin_mode == COUNTING_MODE)
+    count(ADD_OP, v, start_time, end_time);
   return 0;
 }
 
 int Remove(int op_id, int v) {
   int start_time = current_time();
-
-  switch (violin_mode) {
-  case COUNTING_MODE:
-    removed[UNKNOWN_VAL][make_pair(start_time,INFINITY)]++;
-    break;
-  case LINEARIZATIONS_MODE:
-    break;
-  case NOTHING_MODE:
-    break;
-  }
+  if (violin_mode == COUNTING_MODE)
+    count(REMOVE_OP, v, start_time);
 
   hout << op_id << ":Rem? ";
 
@@ -178,28 +153,8 @@ int Remove(int op_id, int v) {
   hout << " ";
 
   int end_time = current_time();
-
-  switch (violin_mode) {
-  case COUNTING_MODE:
-    removed[UNKNOWN_VAL][make_pair(start_time,INFINITY)]--;
-    removed[r][make_pair(start_time,end_time)]++;
-    if (remove_violation(r)) {
-      hout << "(Rv) ";
-      num_violations++;
-      violation_happened = true;
-    }
-    if (start_time >= 3 && order_violation(true,r)) {
-      hout << "(Ov)";
-      num_violations++;
-      violation_happened = true;
-    }
-    break;
-  case LINEARIZATIONS_MODE:
-    break;
-  case NOTHING_MODE:
-    break;
-  }
-
+  if (violin_mode == COUNTING_MODE)
+    count(REMOVE_OP, r, start_time, end_time);
   return r;
 }
 
@@ -214,17 +169,6 @@ void violin_pre() {
   relative_time = 0;
   return_happened = false;
   violation_happened = false;
-
-  switch (violin_mode) {
-  case COUNTING_MODE:
-    added.clear();
-    removed.clear();
-    break;
-  case LINEARIZATIONS_MODE:
-    break;
-  case NOTHING_MODE:
-    break;
-  }
 }
 
 void violin_delay() {
@@ -233,17 +177,6 @@ void violin_delay() {
 
 void violin_post() {
   num_executions++;
-
-  switch (violin_mode) {
-  case COUNTING_MODE:
-    check_for_violations();
-    break;
-  case LINEARIZATIONS_MODE:
-    compute_linearizations();
-    break;
-  case NOTHING_MODE:
-    break;
-  }
 
   if (show_histories == SHOW_ALL ||
       (show_histories == SHOW_VIOLATIONS && violation_happened)) {
@@ -268,6 +201,15 @@ int violin(void (*init_fn)(void),
 
   register_pre(violin_pre);
   register_pre(init_fn);
+
+  if (violin_mode == COUNTING_MODE) {
+    register_pre(reset_counters);
+    register_post(check_counting_violations);
+
+  } else if (violin_mode == LINEARIZATIONS_MODE) {
+    register_post(compute_linearizations);
+  }
+
   register_delay(violin_delay);
   register_post(violin_post);
 

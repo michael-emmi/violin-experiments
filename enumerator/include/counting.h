@@ -2,6 +2,8 @@
 /** COUNTING                                                                **/
 /*****************************************************************************/
 
+enum violin_op_t { ADD_OP, REMOVE_OP };
+
 typedef pair<int,int> interval;
 typedef map<interval,int> counter;
 map<int,counter> added;
@@ -147,10 +149,48 @@ bool remove_empty_violation() {
   return false;
 }
 
-void check_for_violations() {
+void check_counting_violations() {
   if (current_time() >= 2 && remove_empty_violation()) {
     hout << "(Ev)";
     num_violations++;
     violation_happened = true;
   }
+}
+
+void count(violin_op_t op, int v, int start_time, int end_time = INFINITY) {
+  if (end_time == INFINITY) {
+    switch (op) {
+    case ADD_OP:
+      added[v][make_pair(start_time,INFINITY)]++;
+      break;
+    case REMOVE_OP:
+      removed[UNKNOWN_VAL][make_pair(start_time,INFINITY)]++;
+    }
+  } else {
+    switch (op) {
+    case ADD_OP:
+      added[v][make_pair(start_time,INFINITY)]--;
+      added[v][make_pair(start_time,end_time)]++;
+      break;
+    case REMOVE_OP:
+      removed[UNKNOWN_VAL][make_pair(start_time,INFINITY)]--;
+      removed[v][make_pair(start_time,end_time)]++;
+      if (remove_violation(v)) {
+        hout << "(Rv) ";
+        num_violations++;
+        violation_happened = true;
+      }
+      if (start_time >= 3 && order_violation(true,v)) {
+        hout << "(Ov)";
+        num_violations++;
+        violation_happened = true;
+      }
+      break;
+    }
+  }
+}
+
+void reset_counters() {
+  added.clear();
+  removed.clear();
 }
