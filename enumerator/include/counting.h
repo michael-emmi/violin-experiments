@@ -6,6 +6,244 @@
 
 enum violin_op_t { ADD_OP, REMOVE_OP };
 
+int ***counters;
+int num_methods;
+int interval_bound;
+int time_offset, last_time;
+
+void __init_counters(int N, int M) {
+  interval_bound = N+1;
+  num_methods = M;
+  counters = new int**[M];
+  for (int m=0; m<M; m++) {
+    counters[m] = new int*[interval_bound];
+    for (int i=0; i<interval_bound; i++) {
+      counters[m][i] = new int[interval_bound+1];
+    }
+  }
+}
+
+void __shift_counters() {
+  for (int m=0; m<num_methods; m++) {
+    for (int i=0; i<interval_bound; i++) {
+      for (int j=0; j<interval_bound; j++) {
+        if (i==0 && j==0)
+          continue;
+        int ti = i>0 ? i-1 : 0;
+        int tj = j>0 ? j-1 : 0;
+        counters[m][ti][tj] += counters[m][i][j];
+        counters[m][i][j] = 0;
+      }
+    }
+    for (int i=1; i<interval_bound; i++) {
+      counters[m][i-1][interval_bound] += counters[m][i][interval_bound];
+      counters[m][i][interval_bound] = 0;
+    }
+  }
+}
+
+void __reset_counters() {
+  for (int m=0; m<num_methods; m++)
+    for (int i=0; i<interval_bound; i++)
+      for (int j=0; j<interval_bound+1; j++)
+        counters[m][i][j] = 0;
+  last_time = 0;
+  time_offset = 0;
+}
+
+int __method(violin_op_t op, int v) {
+  if (op == ADD_OP) {
+    return 0;
+  } else {
+    return 1;
+  }
+}
+
+void __count(violin_op_t op, int v, int start_time, int end_time = INFINITY) {
+  int now = current_time();
+  while (last_time < now) {
+    last_time++;
+    if (last_time > time_bound) {
+      __shift_counters();
+      time_offset++;
+    }
+  }
+
+  start_time -= time_offset;
+  if (start_time < 0) start_time = 0;
+
+  int m = __method(op,v);
+  if (end_time == INFINITY) {
+    counters[m][start_time][interval_bound]++;
+  } else {
+    counters[m][start_time][interval_bound]--;
+    counters[m][start_time][end_time-time_offset]++;
+  }
+}
+
+void __print_counters() {
+  cout << "--+";
+  for (int j=0; j<interval_bound+1; j++)
+    cout << "--";
+  cout << endl;
+  for (int m=0; m<num_methods; m++) {
+    cout << "M" << m << "|";
+    for (int j=0; j<interval_bound; j++)
+      cout << " " << j;
+    cout << " *" << endl;
+    cout << "--+";
+    for (int j=0; j<interval_bound+1; j++)
+      cout << "--";
+    cout << endl;
+    for (int i=0; i<interval_bound; i++) {
+      cout << i << " |";
+      for (int j=0; j<interval_bound+1; j++) {
+        if (i <= j)
+          cout << " " << counters[m][i][j];
+        else
+          cout << " .";
+      }
+      cout << endl;
+    }
+    cout << "--+";
+    for (int j=0; j<interval_bound+1; j++)
+      cout << "--";
+    cout << endl;
+  }
+}
+
+/** CONTAINER SPECIFIC **/
+
+bool __exists(violin_op_t op, int v, int L=0, int R=interval_bound) {
+  int m = __method(op,v);
+  for (int i=L; i<R; i++)
+    for (int j=L; j<R; j++)
+      if (counters[m][i][j])
+        return true;
+  return false;
+}
+
+bool __is_added(int v) {
+  return __exists(ADD_OP,v);
+}
+
+bool __is_removed(int v) {
+  return __exists(REMOVE_OP,v);
+}
+
+int __total(violin_op_t op, int v, int L=0, int R=interval_bound) {
+  int count;
+  int m = __method(op,v);
+  for (int i=L; i<R; i++)
+    for (int j=L; j<R; j++)
+      count += counters[m][i][j];
+  return count;
+}
+
+int __num_added(int v) {
+  return __total(ADD_OP,v);
+}
+
+int __num_removed(int v) {
+  return __total(REMOVE_OP,v);
+}
+
+bool __remove_violation(int v) {
+  if (v == EMPTY_VAL || v == UNKNOWN_VAL) return false;
+  return __num_added(v) < __num_removed(v);
+}
+
+pair<int,int> __span(violin_op_t op, int v, int L=0, int R=interval_bound+1) {
+  int m = __method(op,v);
+  int lhs = INFINITY;
+  int rhs = 0;
+  for (int i=L; i<R; i++) {
+    for (int j=L; j<R; j++) {
+      if (counters[m][i][j] > 0) {
+        lhs = i;
+        rhs = (j == interval_bound) ? INFINITY : j;
+        goto FOUND_LHS;
+      }
+    }
+  }
+FOUND_LHS:
+  if (lhs == INFINITY || rhs == INFINITY)
+    return make_pair(lhs,rhs);
+  OUT_AGAIN: for (int j=R-1; j>=0; j--) {
+    for (int i=L; i<R; i++) {
+      if (counters[m][i][j] > 0) {
+        rhs = (j == interval_bound) ? INFINITY : j;
+        goto FOUND_RHS;
+      }
+    }
+  }
+FOUND_RHS:
+  return make_pair(lhs,rhs);
+}
+
+bool before(pair<int,int> fst, pair<int,int> snd) {
+  return fst.second < snd.first;
+}
+
+bool __present_during(int v, pair<int,int> span) {
+  return __is_added(v)
+      && before(__span(ADD_OP,v), span)
+      && before(span, __span(REMOVE_OP,v));
+}
+
+// TWO barriers required to observe this one.
+bool __remove_empty_violation(int L=0, int R=interval_bound) {
+  if (!__exists(REMOVE_OP,EMPTY_VAL))
+    return false;
+  int m = __method(REMOVE_OP,EMPTY_VAL);
+  for (int i=L; i<R; i++)
+    for (int j=L; j<R; j++)
+      if (counters[m][i][j] > 0)
+        for (int v=0; v<0; v++) // TODO FIXME
+          if (__present_during(v,make_pair(i,j)))
+            return true;
+  return false;
+}
+
+// THREE barriers required to observe this one.
+bool __order_violation(int u, int v) {
+  pair<int,int>
+    addu = __span(ADD_OP,u),
+    remu = __span(REMOVE_OP,u),
+    addv = __span(ADD_OP,v),
+    remv = __span(REMOVE_OP,v);
+
+  switch (violin_order) {
+  case LIFO_ORDER:
+    return u != v && __is_removed(u) && __is_removed(v)
+      && before(addu,addv) && before(addv,remu) && before(remu,remv);
+  case FIFO_ORDER:
+    return u != v && __is_removed(u) && __is_removed(v)
+      && before(addv,addu) && before(addu,remu) && before(remu,remv);
+  default:
+    return false;
+  }
+}
+
+void __check_counting_violations() {
+  if (current_time() >= 2 && __remove_empty_violation()) {
+    hout << "(Ev)";
+    num_violations++;
+    violation_happened = true;
+  }
+}
+
+/******************************************************************************/
+/******************************************************************************/
+/******************************************************************************/
+/******************************************************************************/
+/******************************************************************************/
+/******************************************************************************/
+/******************************************************************************/
+/******************************************************************************/
+/******************************************************************************/
+/******************************************************************************/
+
 typedef pair<int,int> interval;
 typedef map<interval,int> counter;
 map<int,counter> added;

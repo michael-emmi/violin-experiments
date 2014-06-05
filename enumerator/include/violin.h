@@ -58,7 +58,7 @@ violin_show_t show_histories;
 const int INFINITY = 9999;
 const int EMPTY_VAL = -1;
 const int UNKNOWN_VAL = -2;
-int absolute_time, relative_time, time_bound;
+int absolute_time, time_bound;
 bool return_happened, violation_happened;
 bool deterministic_monitor;
 int num_executions;
@@ -67,16 +67,10 @@ stringstream hout;
 
 void increment_time() {
   absolute_time++;
-
-  if (relative_time < time_bound) {
-    relative_time++;
-  } else {
-    // shift everything...
-  }
 }
 
 int current_time() {
-  return relative_time;
+  return absolute_time;
 }
 
 struct Operation {
@@ -118,37 +112,30 @@ int (*remove_function)(void);
 int Add(int op_id, int v) {
   int start_time = current_time();
   if (violin_mode == COUNTING_MODE)
-    count(ADD_OP, v, start_time);
+    __count(ADD_OP, v, start_time);
 
   hout << op_id << ":Add(" << v << ")? ";
-
   add_function(v);
-
   hout << op_id << ":Add! ";
 
-  int end_time = current_time();
-
   if (violin_mode == COUNTING_MODE)
-    count(ADD_OP, v, start_time, end_time);
+    __count(ADD_OP, v, start_time, current_time());
   return 0;
 }
 
 int Remove(int op_id, int v) {
   int start_time = current_time();
   if (violin_mode == COUNTING_MODE)
-    count(REMOVE_OP, v, start_time);
+    __count(REMOVE_OP, v, start_time);
 
   hout << op_id << ":Rem? ";
-
   int r = remove_function();
-
   hout << op_id << ":Rem" << "!";
   if (r == EMPTY_VAL) hout << "E"; else hout << r;
   hout << " ";
 
-  int end_time = current_time();
   if (violin_mode == COUNTING_MODE)
-    count(REMOVE_OP, r, start_time, end_time);
+    __count(REMOVE_OP, r, start_time, current_time());
   return r;
 }
 
@@ -160,7 +147,6 @@ int Tick(int op_id, int v) {
 
 void violin_pre() {
   absolute_time = 0;
-  relative_time = 0;
   return_happened = false;
   violation_happened = false;
 }
@@ -213,11 +199,13 @@ int violin(void (*init_fn)(void),
   time_bound = (mode == COUNTING_MODE) ? num_barriers : INFINITY;
   show_histories = show;
 
+  __init_counters(num_barriers,2);
   register_pre(violin_pre);
   register_pre(init_fn);
 
   if (violin_mode == COUNTING_MODE) {
     register_pre(reset_counters);
+    register_pre(__reset_counters);
     register_post(check_counting_violations);
 
   } else if (violin_mode == LINEARIZATIONS_MODE) {
