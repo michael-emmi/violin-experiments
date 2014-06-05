@@ -2,6 +2,9 @@
 /** MEMORY ALLOCATION (TO CATCH ABA)                                        **/
 /*****************************************************************************/
 
+#include <deque>
+#include <set>
+
 enum violin_alloc_policy_t { DEFAULT_ALLOC, LRF_ALLOC, MRF_ALLOC };
 violin_alloc_policy_t alloc_policy;
 

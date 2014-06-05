@@ -2,7 +2,11 @@
 /** FIBER MAGIC                                                             **/
 /*****************************************************************************/
 
+#include <vector>
+#include <deque>
 #include "Coro.h"
+
+using namespace std;
 
 Coro *scheduler;
 Coro *current;

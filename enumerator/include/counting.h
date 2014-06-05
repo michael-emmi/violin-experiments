@@ -2,6 +2,8 @@
 /** COUNTING                                                                **/
 /*****************************************************************************/
 
+#include <map>
+
 enum violin_op_t { ADD_OP, REMOVE_OP };
 
 typedef pair<int,int> interval;

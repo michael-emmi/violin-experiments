@@ -39,16 +39,12 @@
 
 #include <iostream>
 #include <vector>
-#include <stack>
-#include <deque>
-#include <queue>
-#include <set>
-#include <map>
 #include <time.h>
-using namespace std;
 
 #include "enumeration.h"
 #include "allocation.h"
+
+using namespace std;
 
 enum violin_order_t { NO_ORDER, LIFO_ORDER, FIFO_ORDER };
 violin_order_t violin_order;
