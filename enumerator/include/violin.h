@@ -59,40 +59,14 @@ violin_mode_t violin_mode;
 enum violin_show_t { SHOW_NONE, SHOW_VIOLATIONS, SHOW_ALL };
 violin_show_t show_histories;
 
-/*****************************************************************************/
-/** OPERATIONS                                                              **/
-/*****************************************************************************/
-
-struct Operation {
-  Operation(int(*f)(int,int), int p, int r)
-    : proc(f), parameter(p), result(r) {
-    id = unique_id++;
-    coroutine = Coro_new();
-  }
-  static int unique_id;
-  int id;
-  int (*proc)(int,int);
-  int parameter;
-  int result;
-  Coro *coroutine;
-  static void run(void *context);
-};
-int Operation::unique_id = 0;
-void Operation::run(void *context)  {
-  Operation *op = (Operation*) context;
-  Yield();
-  op->result = op->proc(op->id,op->parameter);
-  Complete();
-}
-
-/*****************************************************************************/
-/** INSTRUMENTATION                                                         **/
-/*****************************************************************************/
-
-vector<Operation*> violin_operations;
-bool deterministic_monitor;
-bool return_happened, violation_happened;
+const int INFINITY = 9999;
+const int EMPTY_VAL = -1;
+const int UNKNOWN_VAL = -2;
 int absolute_time, relative_time, time_bound;
+bool return_happened, violation_happened;
+bool deterministic_monitor;
+int num_executions;
+int num_violations;
 stringstream hout;
 
 void increment_time() {
@@ -109,25 +83,45 @@ int current_time() {
   return relative_time;
 }
 
-const int INFINITY = 9999;
-const int EMPTY_VAL = -1;
-const int UNKNOWN_VAL = -2;
-int num_executions;
-int num_violations;
-
-void (*add_function)(int);
-int (*remove_function)(void);
-
-#include "counting.h"
-#include "linearization.h"
-
-int Add(int op_id, int v) {
-
+struct Operation {
+  Operation(int(*f)(int,int), int p, int r)
+    : proc(f), parameter(p), result(r) {
+    id = unique_id++;
+    coroutine = Coro_new();
+  }
+  static int unique_id;
+  int id;
+  int start_time, end_time;
+  int (*proc)(int,int);
+  int parameter, result;
+  Coro *coroutine;
+  static void run(void *context);
+};
+int Operation::unique_id = 0;
+void Operation::run(void *context)  {
+  Operation *op = (Operation*) context;
+  Yield();
   if (deterministic_monitor && return_happened) {
     increment_time();
     return_happened = false;
   }
+  op->start_time = current_time();
+  op->end_time = INFINITY;
+  op->result = op->proc(op->id,op->parameter);
+  op->end_time = current_time();
+  return_happened = true;
+  Complete();
+}
 
+vector<Operation*> violin_operations;
+
+#include "counting.h"
+#include "linearization.h"
+
+void (*add_function)(int);
+int (*remove_function)(void);
+
+int Add(int op_id, int v) {
   int start_time = current_time();
 
   switch (violin_mode) {
@@ -135,7 +129,6 @@ int Add(int op_id, int v) {
     added[v][make_pair(start_time,INFINITY)]++;
     break;
   case LINEARIZATIONS_MODE:
-    operations.insert({.id = op_id, .start = start_time, .finish = INFINITY});
     break;
   case NOTHING_MODE:
     break;
@@ -155,24 +148,15 @@ int Add(int op_id, int v) {
     added[v][make_pair(start_time,end_time)]++;
     break;
   case LINEARIZATIONS_MODE:
-    operations.erase({.id = op_id, .start = start_time, .finish = INFINITY});
-    operations.insert({.id = op_id, .start = start_time, .finish = end_time});
     break;
   case NOTHING_MODE:
     break;
   }
 
-  return_happened = true;
   return 0;
 }
 
 int Remove(int op_id, int v) {
-
-  if (deterministic_monitor && return_happened) {
-    increment_time();
-    return_happened = false;
-  }
-
   int start_time = current_time();
 
   switch (violin_mode) {
@@ -180,7 +164,6 @@ int Remove(int op_id, int v) {
     removed[UNKNOWN_VAL][make_pair(start_time,INFINITY)]++;
     break;
   case LINEARIZATIONS_MODE:
-    operations.insert({.id = op_id, .start = start_time, .finish = INFINITY});
     break;
   case NOTHING_MODE:
     break;
@@ -212,14 +195,11 @@ int Remove(int op_id, int v) {
     }
     break;
   case LINEARIZATIONS_MODE:
-    operations.erase({.id = op_id, .start = start_time, .finish = INFINITY});
-    operations.insert({.id = op_id, .start = start_time, .finish = end_time});
     break;
   case NOTHING_MODE:
     break;
   }
 
-  return_happened = true;
   return r;
 }
 
@@ -241,7 +221,6 @@ void violin_pre() {
     removed.clear();
     break;
   case LINEARIZATIONS_MODE:
-    operations.clear();
     break;
   case NOTHING_MODE:
     break;

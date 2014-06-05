@@ -9,12 +9,18 @@ struct OP {
     return id < o.id;
   }
 };
-multiset<OP> operations;
 
 void compute_linearizations() {
+  multiset<OP> operations;
   queue< pair< vector<OP>, multiset<OP> > > work_list;
   vector< vector<OP> > linearizations;
   vector<OP> empty_seq;
+
+  for (vector<Operation*>::iterator op = violin_operations.begin();
+      op != violin_operations.end(); ++op)
+    operations.insert({.id = (*op)->id,
+      .start = (*op)->start_time, .finish = (*op)->end_time
+    });
 
   work_list.push(make_pair(empty_seq,operations));
 
@@ -28,7 +34,7 @@ void compute_linearizations() {
       continue;
     }
 
-    int min = 9999;
+    int min = INFINITY;
     for (multiset<OP>::iterator o = remaining.begin(); o != remaining.end(); ++o)
       if (o->start < min)
         min = o->start;
