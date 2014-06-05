@@ -77,7 +77,7 @@ bool Resume(Coro *c) {
 /** SCHEDULE EXPLORATION                                                    **/
 /*****************************************************************************/
 
-vector<void(*)()> pre, post;
+vector<void(*)()> pre_listeners, delay_listeners, post_listeners;
 deque<Coro*> schedule;
 
 void register_thread(Coro *c, void (*run)(void*), void *arg) {
@@ -85,12 +85,22 @@ void register_thread(Coro *c, void (*run)(void*), void *arg) {
   Coro_startCoro_(scheduler, current = c, arg, run);
 }
 
+void notify(vector<void(*)()> listeners) {
+  for (vector<void(*)()>::iterator i = listeners.begin();
+       i != listeners.end(); ++i)
+    (*i)();
+}
+
 void register_pre(void (*fn)()) {
-  pre.push_back(fn);
+  pre_listeners.push_back(fn);
+}
+
+void register_delay(void (*fn)()) {
+  delay_listeners.push_back(fn);
 }
 
 void register_post(void (*fn)()) {
-  post.push_back(fn);
+  post_listeners.push_back(fn);
 }
 
 int search(int num_delays) {
@@ -105,11 +115,11 @@ int search(int num_delays) {
   while (true) {
     int d = 0;
 
-    for (vector<void(*)()>::iterator i = pre.begin(); i != pre.end(); ++i)
-      (*i)();
+    notify(pre_listeners);
 
     for (int step=0; !schedule.empty(); step++) {
       if (schedule.size() > 1 && d < num_delays && delays[d] == step) {
+        notify(delay_listeners);
         schedule.push_back(schedule.front());
         schedule.pop_front();
         d++;
@@ -118,8 +128,7 @@ int search(int num_delays) {
       }
     }
 
-    for (vector<void(*)()>::iterator i = post.begin(); i != post.end(); ++i)
-      (*i)();
+    notify(post_listeners);
 
     if (d == 0) break;
     
@@ -595,6 +604,10 @@ void violin_pre() {
   }
 }
 
+void violin_delay() {
+  hout << "* ";
+}
+
 void violin_post() {
   num_executions++;
 
@@ -632,6 +645,7 @@ int violin(void (*init_fn)(void),
   register_pre(violin_add_threads);
   register_pre(violin_pre);
   register_pre(init_fn);
+  register_delay(violin_delay);
   register_post(violin_post);
 
   deterministic_monitor = true;
