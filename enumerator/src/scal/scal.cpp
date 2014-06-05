@@ -49,7 +49,7 @@ enum {
 
 struct obj_desc {
   int id;
-  int order;
+  violin_order_t order;
   string short_name;
   string long_name;
 };
@@ -113,7 +113,7 @@ string obj_name(int id) {
   return "????";
 }
 
-int obj_order(int id) {
+violin_order_t obj_order(int id) {
   int len = sizeof(objects) / sizeof(obj_desc);
   for (int i=0; i<len; i++)
     if (objects[i].id == id)
@@ -142,6 +142,7 @@ DEFINE_int32(adds, 1, "how many add operations?");
 DEFINE_int32(removes, 1, "how many remove operations?");
 DEFINE_int32(barriers, 0, "how many barriers?");
 DEFINE_int32(delays, 0, "how many delays?");
+DEFINE_int32(mode, 1, "mode? 0=nothing, 1=counting, 2=linearizations");
 DEFINE_int32(alloc, 0, "allocation policy? 0=default, 1=LRF, 2=MRF");
 
 uint64_t g_num_threads;
@@ -179,12 +180,27 @@ int main(int argc, char **argv) {
   scal::ThreadContext::prepare(g_num_threads + 1);
   scal::ThreadContext::assign_context();
 
+  violin_mode_t mode;
+  switch (FLAGS_mode) {
+  case 0: mode = NOTHING_MODE; break;
+  case 1: mode = COUNTING_MODE; break;
+  default: mode = LINEARIZATIONS_MODE; break;
+  }
+
+  violin_alloc_policy_t alloc;
+  switch (FLAGS_alloc) {
+  case 0: alloc = DEFAULT_ALLOC; break;
+  case 1: alloc = LRF_ALLOC; break;
+  default: alloc = MRF_ALLOC; break;
+  }
+
   cout << "Running SCAL data structure: " << obj_name(violin_object) << endl;
   violin(
     obj_reset,
     obj_add, FLAGS_adds,
     obj_rem, FLAGS_removes,
-    FLAGS_alloc,
+    mode,
+    alloc,
     obj_order(violin_object),
     FLAGS_barriers,
     FLAGS_delays

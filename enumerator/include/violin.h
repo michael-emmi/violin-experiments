@@ -9,6 +9,7 @@
  *       init_fn,
  *       add_fn, num_adds,
  *       remove_fn, num_removes,
+ *       mode,
  *       allocation_policy,
  *       container_order,
  *       num_barriers, num_delays
@@ -22,10 +23,11 @@
  * 3. int num_adds            how many add operations?
  * 4. int (*remove_fn)(void)  for removing an element
  * 5. int num_removes         how many remove operations?
- * 6. int allocation_policy   from DEFAULT_ALLOC, LRF_ALLOC, MRF_ALLOC
- * 7. int container_order     from NO_ORDER, LIFO_ORDER, FIFO_ORDER
- * 8. int num_barriers        how many barriers?
- * 9. int num_delays          how many delays?
+ * 6. violin_mode_t mode      how to monitor?
+ * 7. int allocation_policy   from DEFAULT_ALLOC, LRF_ALLOC, MRF_ALLOC
+ * 8. int container_order     from NO_ORDER, LIFO_ORDER, FIFO_ORDER
+ * 9. int num_barriers        how many barriers?
+ * 10. int num_delays         how many delays?
  *
  * Once the "violin" function is called, every possible delay-bounded round
  * robin schedule of `num_adds` add operations followed by `num_removes`
@@ -39,6 +41,7 @@
 #include <vector>
 #include <stack>
 #include <deque>
+#include <queue>
 #include <set>
 #include <map>
 #include <time.h>
@@ -147,8 +150,8 @@ int search(int num_delays) {
 /** MEMORY ALLOCATION (TO CATCH ABA)                                        **/
 /*****************************************************************************/
 
-enum { DEFAULT_ALLOC, LRF_ALLOC, MRF_ALLOC };
-int violin_alloc_policy;
+enum violin_alloc_policy_t { DEFAULT_ALLOC, LRF_ALLOC, MRF_ALLOC };
+violin_alloc_policy_t alloc_policy;
 
 deque<void*> free_pool;
 set<void*> alloc_set;
@@ -169,7 +172,7 @@ void violin_free(void *x) {
   if (alloc_set.find(x) == alloc_set.end())
     return;
 
-  switch (violin_alloc_policy) {
+  switch (alloc_policy) {
   case LRF_ALLOC:
     free_pool.push_back(x);
     break;
@@ -233,8 +236,8 @@ int num_violations;
 void (*add_function)(int);
 int (*remove_function)(void);
 
-int violin_order;
-enum { NO_ORDER, LIFO_ORDER, FIFO_ORDER };
+enum violin_order_t { NO_ORDER, LIFO_ORDER, FIFO_ORDER };
+violin_order_t violin_order;
 
 typedef pair<int,int> interval;
 typedef map<interval,int> counter;
@@ -394,40 +397,149 @@ void check_for_violations() {
   }
 }
 
+struct OP {
+  int id;
+  static int unique_id;
+  int start;
+  int finish;
+  bool operator< (const OP& o) const {
+    return id < o.id;
+  }
+};
+int OP::unique_id = 0;
+multiset<OP> operations;
+
+void compute_linearizations() {
+  queue< pair< vector<OP>, multiset<OP> > > work_list;
+  vector< vector<OP> > linearizations;
+  vector<OP> empty_seq;
+
+  work_list.push(make_pair(empty_seq,operations));
+
+  while (!work_list.empty()) {
+    vector<OP> sequence = work_list.front().first;
+    multiset<OP> remaining = work_list.front().second;
+    work_list.pop();
+
+    if (remaining.empty()) {
+      linearizations.push_back(sequence);
+      continue;
+    }
+
+    int min = 9999;
+    for (multiset<OP>::iterator o = remaining.begin(); o != remaining.end(); ++o)
+      if (o->start < min)
+        min = o->start;
+
+    multiset<OP> minimals;
+    for (multiset<OP>::iterator o = remaining.begin(); o != remaining.end(); ++o) {
+      if (o->start == min) {
+        minimals.insert(*o);
+      }
+    }
+
+    for (multiset<OP>::iterator o = minimals.begin(); o != minimals.end(); ++o) {
+      vector<OP> sequence2(sequence);
+      multiset<OP> remaining2(remaining);
+      sequence2.push_back(*o);
+      remaining2.erase(*o);
+      work_list.push(make_pair(sequence2,remaining2));
+    }
+  }
+
+  cout << "(" << linearizations.size() << "ls) ";
+
+  // cout << endl;
+  // for (vector< vector<OP> >::iterator lin = linearizations.begin(); lin != linearizations.end(); ++lin) {
+  //   for (vector<OP>::iterator o = lin->begin(); o != lin->end(); ++o)
+  //     cout << o->id << " ";
+  //   cout << endl;
+  // }
+}
+
+void linearizations_pre() {
+  operations.clear();
+  OP::unique_id = 0;
+}
+void linearizations_post() {
+  compute_linearizations();
+}
+
+enum violin_mode_t { NOTHING_MODE, COUNTING_MODE, LINEARIZATIONS_MODE  };
+violin_mode_t violin_mode;
+
 int Add(int op_id, int v) {
   int start_time = violin_time;
-  added[v][make_pair(start_time,INFINITY)]++;
+
+  switch (violin_mode) {
+  case COUNTING_MODE:
+    added[v][make_pair(start_time,INFINITY)]++;
+    break;
+  case LINEARIZATIONS_MODE:
+    operations.insert({.id = OP::unique_id++, .start = start_time, .finish = 9999});
+    break;
+  case NOTHING_MODE:
+    break;
+  }
+
   cout << op_id << ":Add(" << v << ")? ";
 
   add_function(v);
 
-  added[v][make_pair(start_time,INFINITY)]--;
-  added[v][make_pair(start_time,violin_time)]++;
   cout << op_id << ":Add! ";
+
+  switch (violin_mode) {
+  case COUNTING_MODE:
+    added[v][make_pair(start_time,INFINITY)]--;
+    added[v][make_pair(start_time,violin_time)]++;
+    break;
+  case LINEARIZATIONS_MODE:
+  case NOTHING_MODE:
+    break;
+  }
+
   return 0;
 }
 
 int Remove(int op_id, int v) {
   int start_time = violin_time;
-  removed[UNKNOWN_VAL][make_pair(start_time,INFINITY)]++;
+
+  switch (violin_mode) {
+  case COUNTING_MODE:
+    removed[UNKNOWN_VAL][make_pair(start_time,INFINITY)]++;
+    break;
+  case LINEARIZATIONS_MODE:
+    operations.insert({.id = OP::unique_id++, .start = start_time, .finish = 9999});
+    break;
+  case NOTHING_MODE:
+    break;
+  }
+
   cout << op_id << ":Rem? ";
 
   int r = remove_function();
 
-  removed[UNKNOWN_VAL][make_pair(start_time,INFINITY)]--;
-  removed[r][make_pair(start_time,violin_time)]++;
   cout << op_id << ":Rem" << "!";
   if (r == EMPTY_VAL) cout << "E"; else cout << r;
   cout << " ";
 
-  if (remove_violation(r)) {
-    cout << "(Rv) ";
-    num_violations++;
-  }
-
-  if (start_time >= 3 && order_violation(true,r)) {
-    cout << "(Ov)";
-    num_violations++;
+  switch (violin_mode) {
+  case COUNTING_MODE:
+    removed[UNKNOWN_VAL][make_pair(start_time,INFINITY)]--;
+    removed[r][make_pair(start_time,violin_time)]++;
+    if (remove_violation(r)) {
+      cout << "(Rv) ";
+      num_violations++;
+    }
+    if (start_time >= 3 && order_violation(true,r)) {
+      cout << "(Ov)";
+      num_violations++;
+    }
+    break;
+  case LINEARIZATIONS_MODE:
+    break;
+  case NOTHING_MODE:
+    break;
   }
 
   return r;
@@ -447,15 +559,18 @@ void violin_add_threads() {
 int violin(void (*init_fn)(void),
     void (*add_fn)(int), int num_adds,
     int (*rem_fn)(void), int num_removes,
-    int allocation_policy,
-    int container_order,
+    violin_mode_t mode,
+    violin_alloc_policy_t allocation_policy,
+    violin_order_t container_order,
     int num_barriers, int num_delays) {
 
   register_pre(violin_reset_counters);
+  register_pre(linearizations_pre);
   register_pre(violin_clear_alloc_pool);
   register_pre(violin_add_threads);
   register_pre(init_fn);
   register_post(check_for_violations);
+  register_post(linearizations_post);
 
   add_function = add_fn;
   for (int i=0; i<num_adds; i++)
@@ -465,7 +580,8 @@ int violin(void (*init_fn)(void),
   for (int i=0; i<num_removes; i++)
     violin_operations.push_back(new Operation(Remove,0,0));
 
-  violin_alloc_policy = allocation_policy;
+  violin_mode = mode;
+  alloc_policy = allocation_policy;
   violin_order = container_order;
 
   for (int i=0; i<num_barriers; i++)
