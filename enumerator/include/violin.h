@@ -197,6 +197,26 @@ int violin(void (*init_fn)(void),
     int num_barriers, int num_delays,
     violin_show_t show) {
 
+  deterministic_monitor = true;
+
+  add_function = add_fn;
+  for (int i=0; i<num_adds; i++)
+    violin_operations.push_back(new Operation(Add,i+1,0));
+
+  remove_function = rem_fn;
+  for (int i=0; i<num_removes; i++)
+    violin_operations.push_back(new Operation(Remove,0,0));
+
+  if (!deterministic_monitor)
+    for (int i=0; i<num_barriers; i++)
+      violin_operations.push_back(new Operation(Tick,0,0));
+
+  violin_mode = mode;
+  alloc_policy = allocation_policy;
+  violin_order = container_order;
+  time_bound = (mode == COUNTING_MODE) ? num_barriers : INFINITY;
+  show_histories = show;
+
   register_pre(violin_pre);
   register_pre(init_fn);
 
@@ -210,26 +230,6 @@ int violin(void (*init_fn)(void),
 
   register_delay(violin_delay);
   register_post(violin_post);
-
-  deterministic_monitor = true;
-  show_histories = show;
-  time_bound = (mode == COUNTING_MODE) ? num_barriers : INFINITY;
-
-  add_function = add_fn;
-  for (int i=0; i<num_adds; i++)
-    violin_operations.push_back(new Operation(Add,i+1,0));
-
-  remove_function = rem_fn;
-  for (int i=0; i<num_removes; i++)
-    violin_operations.push_back(new Operation(Remove,0,0));
-
-  violin_mode = mode;
-  alloc_policy = allocation_policy;
-  violin_order = container_order;
-
-  if (!deterministic_monitor)
-    for (int i=0; i<num_barriers; i++)
-      violin_operations.push_back(new Operation(Tick,0,0));
 
   for (vector<Operation*>::iterator op = violin_operations.begin();
       op != violin_operations.end(); ++op)
