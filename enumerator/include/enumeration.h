@@ -46,6 +46,8 @@ void Thread::execute(void* context) {
 /** SCHEDULE EXPLORATION                                                    **/
 /*****************************************************************************/
 
+#include "Scheduler.h"
+
 vector<Thread> threads;
 vector<void(*)()> pre_listeners, delay_listeners, post_listeners;
 
@@ -68,44 +70,32 @@ void notify(vector<void(*)()> listeners) {
 }
 
 int search(int num_delays) {
-  deque<Coro*> schedule;
-  int delays[num_delays];
-
   scheduler = Coro_new();
   Coro_initializeMainCoro(scheduler);
 
-  for (int i=0; i<num_delays; i++)
-    delays[i] = i;
+  RoundRobinScheduler s(threads, num_delays);
 
-  while (true) {
-    int d = 0;
-
+  while (s.nextSchedule()) {
     for (vector<Thread>::iterator t = threads.begin(); t != threads.end(); ++t) {
-      schedule.push_back(t->coro);
       Coro_startCoro_(scheduler, current = t->coro, &(*t), &Thread::execute);
     }
 
     notify(pre_listeners);
 
-    for (int step=0; !schedule.empty(); step++) {
-      if (schedule.size() > 1 && d < num_delays && delays[d] == step) {
+    while (true) {
+      int current_thread = s.nextStep();
+
+      if (current_thread == Scheduler::DONE)
+        break;
+
+      else if (current_thread == Scheduler::DELAY)
         notify(delay_listeners);
-        schedule.push_back(schedule.front());
-        schedule.pop_front();
-        d++;
-      } else if (Resume(schedule.front())) {
-        schedule.pop_front();
-      }
+
+      else if (Resume(threads[current_thread].coro))
+        s.completed();
     }
 
     notify(post_listeners);
-
-    if (d == 0) break;
-    
-    delays[d-1]++;
-    for (int i=d; i<num_delays; i++) {
-      delays[i] = delays[i-1] + 1;
-    }
   }
   return 0;
 }
