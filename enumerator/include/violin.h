@@ -221,6 +221,18 @@ int violin(void (*init_fn)(void),
 
   time_t start_time, end_time;
   time(&start_time);
+  cout << "Violin, ";
+  switch (mode) {
+    case COUNTING_MODE: cout << "counting"; break;
+    case LINEARIZATIONS_MODE: cout << "linearization"; break;
+    default: cout << "unmonitored"; break;
+  }
+  cout << " mode w/ "
+       << num_adds << " adds, "
+       << num_removes << " removes, "
+       << num_barriers << " barriers, "
+       << num_delays << " delays."
+       << endl;
   cout << "Enumerating schedules with "
        << num_adds + num_removes + num_barriers << " threads "
        << "and " << num_delays << " delays..." << endl;

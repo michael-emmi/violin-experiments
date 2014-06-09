@@ -204,7 +204,7 @@ int main(int argc, char **argv) {
   else
     show = SHOW_ALL;
 
-  cout << "Running SCAL data structure: " << obj_name(violin_object) << endl;
+  cout << "Selected SCAL data structure: " << obj_name(violin_object) << endl;
   violin(
     obj_reset,
     obj_add, FLAGS_adds,
