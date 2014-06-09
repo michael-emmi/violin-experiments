@@ -104,6 +104,7 @@ void Operation::run(void *context)  {
 vector<Operation*> violin_operations;
 
 #include "counting.h"
+#include "containers.h"
 #include "linearization.h"
 
 void (*add_function)(int);
@@ -112,21 +113,21 @@ int (*remove_function)(void);
 int Add(int op_id, int v) {
   int start_time = current_time();
   if (violin_mode == COUNTING_MODE)
-    __count(ADD_OP, v, start_time);
+    __count(ADD_OP, v, UNKNOWN_VAL, start_time);
 
   hout << op_id << ":Add(" << v << ")? ";
   add_function(v);
   hout << op_id << ":Add! ";
 
   if (violin_mode == COUNTING_MODE)
-    __count(ADD_OP, v, start_time, current_time());
+    __count(ADD_OP, v, 0, start_time, current_time());
   return 0;
 }
 
 int Remove(int op_id, int v) {
   int start_time = current_time();
   if (violin_mode == COUNTING_MODE)
-    __count(REMOVE_OP, v, start_time);
+    __count(REMOVE_OP, v, UNKNOWN_VAL, start_time);
 
   hout << op_id << ":Rem? ";
   int r = remove_function();
@@ -135,7 +136,7 @@ int Remove(int op_id, int v) {
   hout << " ";
 
   if (violin_mode == COUNTING_MODE)
-    __count(REMOVE_OP, r, start_time, current_time());
+    __count(REMOVE_OP, v, r, start_time, current_time());
   return r;
 }
 
@@ -183,7 +184,7 @@ int violin(void (*init_fn)(void),
 
   add_function = add_fn;
   for (int i=0; i<num_adds; i++)
-    violin_operations.push_back(new Operation(Add,i+1,0));
+    violin_operations.push_back(new Operation(Add,i,0));
 
   remove_function = rem_fn;
   for (int i=0; i<num_removes; i++)
@@ -199,14 +200,13 @@ int violin(void (*init_fn)(void),
   time_bound = (mode == COUNTING_MODE) ? num_barriers : INFINITY;
   show_histories = show;
 
-  __init_counters(num_barriers,2);
+  init_container_counters(num_barriers,num_adds);
   register_pre(violin_pre);
   register_pre(init_fn);
 
   if (violin_mode == COUNTING_MODE) {
-    register_pre(reset_counters);
     register_pre(__reset_counters);
-    register_post(check_counting_violations);
+    register_post(__check_counting_violations);
 
   } else if (violin_mode == LINEARIZATIONS_MODE) {
     register_post(compute_linearizations);
