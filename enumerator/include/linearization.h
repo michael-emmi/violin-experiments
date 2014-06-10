@@ -40,11 +40,15 @@ void add_to_histories() {
 }
 
 void compute_sequential_histories() {
-  cout << "Computing sequential histories..." << endl;
+  cout << "Computing sequential histories... ";
   register_post(add_to_histories);
+  time_t start_time, end_time;
+  time(&start_time);
   search_atomic_threads();
+  time(&end_time);
   unregister_post(add_to_histories);
-  cout << linear_histories.size() << " histories computed." << endl;
+  cout << linear_histories.size() << " histories computed in " 
+       << difftime(end_time,start_time) << "s." << endl;
 }
 
 string linearization_to_string(vector<OP> l) {
