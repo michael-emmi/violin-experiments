@@ -4,6 +4,7 @@
 
 #include <vector>
 #include <deque>
+#include <list>
 #include "Coro.h"
 
 using namespace std;
@@ -49,7 +50,7 @@ void Thread::execute(void* context) {
 #include "Scheduler.h"
 
 vector<Thread> threads;
-vector<void(*)()> pre_listeners, delay_listeners, post_listeners;
+list<void(*)()> pre_listeners, delay_listeners, post_listeners;
 
 void register_thread(void (*run)(void*), void *obj) {
   threads.push_back({.coro = Coro_new(), .run = run, .obj = obj});
@@ -57,23 +58,31 @@ void register_thread(void (*run)(void*), void *obj) {
 void register_pre(void (*fn)()) {
   pre_listeners.push_back(fn);
 }
+void unregister_pre(void (*fn)()) {
+  pre_listeners.remove(fn);
+}
 void register_delay(void (*fn)()) {
   delay_listeners.push_back(fn);
+}
+void unregister_delay(void (*fn)()) {
+  delay_listeners.remove(fn);
 }
 void register_post(void (*fn)()) {
   post_listeners.push_back(fn);
 }
-void notify(vector<void(*)()> listeners) {
-  for (vector<void(*)()>::iterator i = listeners.begin();
+void unregister_post(void (*fn)()) {
+  post_listeners.remove(fn);
+}
+void notify(list<void(*)()> listeners) {
+  for (list<void(*)()>::iterator i = listeners.begin();
        i != listeners.end(); ++i)
     (*i)();
 }
 
-int search(int num_delays) {
+int search(Scheduler &s) {
   scheduler = Coro_new();
   Coro_initializeMainCoro(scheduler);
 
-  RoundRobinScheduler s(threads, num_delays);
 
   while (s.nextSchedule()) {
     for (vector<Thread>::iterator t = threads.begin(); t != threads.end(); ++t) {
@@ -98,4 +107,14 @@ int search(int num_delays) {
     notify(post_listeners);
   }
   return 0;
+}
+
+int search_delay_bounding(int num_delays) {
+  RoundRobinScheduler s(threads, num_delays);
+  return search(s);
+}
+
+int search_atomic_threads() {
+  AtomicScheduler s(threads);
+  return search(s);
 }

@@ -105,7 +105,6 @@ vector<Operation*> violin_operations;
 
 #include "counting.h"
 #include "containers.h"
-#include "linearization.h"
 
 void (*add_function)(int);
 int (*remove_function)(void);
@@ -146,10 +145,15 @@ int Tick(int op_id, int v) {
   return 0;
 }
 
+#include "linearization.h"
+
 void violin_pre() {
   absolute_time = 0;
   return_happened = false;
   violation_happened = false;
+
+  hout.str("");
+  hout.clear();
 }
 
 void violin_delay() {
@@ -164,9 +168,6 @@ void violin_post() {
 
     cout << num_executions << ". " << hout.str() << endl;
   }
-
-  hout.str("");
-  hout.clear();
 
   violin_clear_alloc_pool();
 }
@@ -200,27 +201,10 @@ int violin(void (*init_fn)(void),
   time_bound = (mode == COUNTING_MODE) ? num_barriers : INFINITY;
   show_histories = show;
 
-  init_container_counters(num_barriers,num_adds);
-  register_pre(violin_pre);
-  register_pre(init_fn);
-
-  if (violin_mode == COUNTING_MODE) {
-    register_pre(__reset_counters);
-    register_post(__check_counting_violations);
-
-  } else if (violin_mode == LINEARIZATIONS_MODE) {
-    register_post(compute_linearizations);
-  }
-
-  register_delay(violin_delay);
-  register_post(violin_post);
-
   for (vector<Operation*>::iterator op = violin_operations.begin();
       op != violin_operations.end(); ++op)
     register_thread(&Operation::run, (void*) *op);
 
-  time_t start_time, end_time;
-  time(&start_time);
   cout << "Violin, ";
   switch (mode) {
     case COUNTING_MODE: cout << "counting"; break;
@@ -233,10 +217,29 @@ int violin(void (*init_fn)(void),
        << num_barriers << " barriers, "
        << num_delays << " delays."
        << endl;
+
+  register_pre(init_fn);
+  register_pre(violin_pre);
+
+  if (violin_mode == COUNTING_MODE) {
+    init_container_counters(num_barriers,num_adds);
+    register_pre(__reset_counters);
+    register_post(__check_counting_violations);
+
+  } else if (violin_mode == LINEARIZATIONS_MODE) {
+    compute_sequential_histories();
+    register_post(compute_linearizations);
+  }
+
+  register_post(violin_post);
+  register_delay(violin_delay);
+
+  time_t start_time, end_time;
+  time(&start_time);
   cout << "Enumerating schedules with "
        << num_adds + num_removes + num_barriers << " threads "
        << "and " << num_delays << " delays..." << endl;
-  search(num_delays);
+  search_delay_bounding(num_delays);
   time(&end_time);
   cout << num_executions << " schedules enumerated in "
        << difftime(end_time,start_time) << "s." << endl;

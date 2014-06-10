@@ -67,3 +67,70 @@ public:
     schedule.pop_front();
   }
 };
+
+class AtomicScheduler : public Scheduler {
+  const int num_threads;
+  vector<int> schedule;
+  int *c, *o;
+  int turn;
+
+public:
+  AtomicScheduler(vector<Thread> ts)
+    : num_threads(ts.size()) {
+
+    c = new int[num_threads];
+    o = new int[num_threads];
+    for (int i=0; i<num_threads; i++) {
+      c[i] = 0;
+      o[i] = 1;
+    }
+  }
+
+  bool nextSchedule() {
+    turn = 0;
+    
+    if (schedule.empty()) {
+      for (int i=0; i<num_threads; i++)
+        schedule.push_back(i);
+      return true;
+    }
+    
+    // "Plain changes" algorithm from Knuth, Combinatorial Algorithms (F2B)
+
+    int j = num_threads-1;
+    int s = 0;
+    int q, x;
+
+    ready_to_change:
+      q = c[j] + o[j];
+      if (q < 0) goto switch_direction;
+      if (q == j+1) goto increase_s;
+      
+    change:
+      x = schedule[j-c[j]+s];
+      schedule[j-c[j]+s] = schedule[j-q+s];
+      schedule[j-q+s] = x;
+      c[j] = q;
+      return true;
+      
+    increase_s:
+      if (j == 0) return false;
+      s++;
+    
+    switch_direction:
+      o[j] = -o[j];
+      j--;
+      goto ready_to_change;
+  }
+
+  int nextStep() {
+    if (turn >= num_threads)
+      return DONE;
+
+    return schedule[turn];
+  }
+  
+  void completed() {
+    turn++;
+  }
+};
