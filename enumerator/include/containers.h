@@ -154,8 +154,10 @@ void __check_counting_violations() {
   for (int v=0; v<num_values; v++) {
     if (__remove_violation(v)) {
       hout << "(Rv:" << v << ") ";
-      num_violations++;
-      violation_happened = true;
+      if (!violation_happened) {
+        num_violations++;
+        violation_happened = true;
+      }
     }
     if (current_time()-time_offset < 3) continue;
     for (int u=0; u<num_values; u++) {
@@ -168,7 +170,9 @@ void __check_counting_violations() {
 
   if (current_time() >= 2 && __remove_empty_violation()) {
     hout << "(Ev) ";
-    num_violations++;
-    violation_happened = true;
+    if (!violation_happened) {
+      num_violations++;
+      violation_happened = true;
+    }
   }
 }
