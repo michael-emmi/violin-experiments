@@ -163,11 +163,11 @@ void violin_post() {
       (show_histories == SHOW_VIOLATIONS && violation_happened)) {
 
     cout << num_executions << ". " << hout.str() << endl;
-
-    hout.str("");
-    hout.clear();
   }
-  
+
+  hout.str("");
+  hout.clear();
+
   violin_clear_alloc_pool();
 }
 
