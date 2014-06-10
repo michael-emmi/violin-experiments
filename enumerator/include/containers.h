@@ -164,6 +164,10 @@ void __check_counting_violations() {
       if (u == v) continue;
       if (__order_violation(u,v)) {
         hout << "(Ov: " << u << ":" << v << ") ";
+        if (!violation_happened) {
+          num_violations++;
+          violation_happened = true;
+        }
       }
     }
   }
