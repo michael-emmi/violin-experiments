@@ -6,6 +6,7 @@
 #include <queue>
 #include <unordered_set>
 #include <set>
+#include <regex>
 
 struct OP {
   Operation *op;
@@ -14,13 +15,12 @@ struct OP {
   string to_string() {
     stringstream s;
     if (op->proc == Add)
-      s << op->id << ":Add(" << op->parameter << ")? "
-        << op->id << ":Add!";
+      s << "Add(" << op->parameter << ")";
     else if (op->proc == Remove) {
-      s << op->id << ":Rem? "
-        << op->id << ":Rem!";
+      s << "Rem(";
       if (op->result == EMPTY_VAL) s << "E";
       else s << op->result;
+      s << ")";
     } else
       s << "????";
     return s.str();
@@ -34,9 +34,22 @@ struct OP {
 };
 
 unordered_set<string> linear_histories;
+regex op_id("[0-9]+:");
+regex add_call("Add[(]([0-9]+)[)][?]");
+regex add_ret("Add! ");
+regex rem_call("Rem[?] ");
+regex rem_ret("Rem!([0-9E]+)");
+regex marks("[?!]");
 
 void add_to_histories() {
-  linear_histories.insert(hout.str());
+  string h = hout.str();
+  h = regex_replace(h,op_id,"");
+  h = regex_replace(h,add_call,"Add($1)");
+  h = regex_replace(h,add_ret,"");
+  h = regex_replace(h,rem_call,"");
+  h = regex_replace(h,rem_ret,"Rem($1)");
+  // h = regex_replace(h,marks,"");
+  linear_histories.insert(h);
 }
 
 void compute_sequential_histories() {
@@ -49,10 +62,10 @@ void compute_sequential_histories() {
   unregister_post(add_to_histories);
   cout << linear_histories.size() << " histories computed in " 
        << difftime(end_time,start_time) << "s." << endl;
-  for (unordered_set<string>::iterator h = linear_histories.begin();
-       h != linear_histories.end(); ++h) {
-   cout << *h << endl;
-  }
+  // for (unordered_set<string>::iterator h = linear_histories.begin();
+  //      h != linear_histories.end(); ++h) {
+  //   cout << *h << endl;
+  // }
 }
 
 string linearization_to_string(vector<OP> l) {
@@ -82,10 +95,10 @@ void compute_linearizations() {
     if (remaining.empty()) {
       if (linear_histories.find(linearization_to_string(sequence))
           != linear_histories.end()) {
-        cout << ":-) " << linearization_to_string(sequence) << endl;
+        // cout << ":-) " << linearization_to_string(sequence) << endl;
         return;
       } else {
-        cout << ":-X " << linearization_to_string(sequence) << endl;
+        // cout << ":-X " << linearization_to_string(sequence) << endl;
         linearizations.push_back(sequence);
         continue;
       }
