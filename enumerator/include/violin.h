@@ -185,7 +185,7 @@ int violin(void (*init_fn)(void),
 
   add_function = add_fn;
   for (int i=0; i<num_adds; i++)
-    violin_operations.push_back(new Operation(Add,i,0));
+    violin_operations.push_back(new Operation(Add,i+1,0));
 
   remove_function = rem_fn;
   for (int i=0; i<num_removes; i++)

@@ -49,6 +49,10 @@ void compute_sequential_histories() {
   unregister_post(add_to_histories);
   cout << linear_histories.size() << " histories computed in " 
        << difftime(end_time,start_time) << "s." << endl;
+  for (unordered_set<string>::iterator h = linear_histories.begin();
+       h != linear_histories.end(); ++h) {
+   cout << *h << endl;
+  }
 }
 
 string linearization_to_string(vector<OP> l) {
@@ -78,10 +82,10 @@ void compute_linearizations() {
     if (remaining.empty()) {
       if (linear_histories.find(linearization_to_string(sequence))
           != linear_histories.end()) {
-        // cout << ":-) " << linearization_to_string(sequence) << endl;
+        cout << ":-) " << linearization_to_string(sequence) << endl;
         return;
       } else {
-        // cout << ":-X " << linearization_to_string(sequence) << endl;
+        cout << ":-X " << linearization_to_string(sequence) << endl;
         linearizations.push_back(sequence);
         continue;
       }

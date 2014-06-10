@@ -7,14 +7,14 @@ int num_values;
 // THE NUMBERING
 // idx    operation
 // ----------------
-// 0      add(0)
-// 1      add(1)
+// 0      add(1)
+// 1      add(2)
 // ...
-// V-1    add(V-1)
-// V      rem(0)
-// V+1    rem(1)
+// V-1    add(V)
+// V      rem(1)
+// V+1    rem(2)
 // ...
-// 2V-1   rem(V-1)
+// 2V-1   rem(V)
 // 2V     rem(-1)
 // 2V+1   rem(?)
 // 2V+2   add(*)
@@ -22,7 +22,7 @@ int num_values;
 
 int container_method(violin_op_t op, int v, int r) {
   if (op == ADD_OP)
-    return (v < num_values) ? v : (2 * num_values + 2);
+    return (v <= num_values) ? v-1 : (2 * num_values + 2);
 
   if (r == EMPTY_VAL)
     return 2 * num_values;
@@ -30,7 +30,7 @@ int container_method(violin_op_t op, int v, int r) {
   if (r == UNKNOWN_VAL)
     return 2 * num_values + 1;
 
-  return (r < num_values) ? (num_values + r) : (2 * num_values + 3);
+  return (r <= num_values) ? (num_values + r-1) : (2 * num_values + 3);
 }
 
 void init_container_counters(int N, int V) {
@@ -123,7 +123,7 @@ bool __remove_empty_violation(int L=0, int R=interval_bound) {
   for (int i=L; i<R; i++)
     for (int j=L; j<R; j++)
       if (counters[m][i][j] > 0)
-        for (int v=0; v<num_values; v++)
+        for (int v=1; v<=num_values; v++)
           if (__present_during(v,make_pair(i,j)))
             return true;
   return false;
@@ -151,7 +151,7 @@ bool __order_violation(int u, int v) {
 
 void __check_counting_violations() {
 
-  for (int v=0; v<num_values; v++) {
+  for (int v=1; v<=num_values; v++) {
     if (__remove_violation(v)) {
       hout << "(Rv:" << v << ") ";
       if (!violation_happened) {
@@ -160,7 +160,7 @@ void __check_counting_violations() {
       }
     }
     if (current_time()-time_offset < 3) continue;
-    for (int u=0; u<num_values; u++) {
+    for (int u=1; u<=num_values; u++) {
       if (u == v) continue;
       if (__order_violation(u,v)) {
         hout << "(Ov: " << u << ":" << v << ") ";
