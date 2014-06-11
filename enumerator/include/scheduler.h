@@ -16,7 +16,7 @@ class RoundRobinScheduler : public Scheduler {
   int delay_count;
 
 public:
-  RoundRobinScheduler(vector<Thread> ts, int delays)
+  RoundRobinScheduler(vector<Thread> &ts, int delays)
     : num_threads(ts.size()), num_delays(delays) {
 
     delay_positions = new int[num_delays];
@@ -75,7 +75,7 @@ class AtomicScheduler : public Scheduler {
   int turn;
 
 public:
-  AtomicScheduler(vector<Thread> ts)
+  AtomicScheduler(vector<Thread> &ts)
     : num_threads(ts.size()) {
 
     c = new int[num_threads];
@@ -92,7 +92,7 @@ public:
     if (schedule.empty()) {
       for (int i=0; i<num_threads; i++)
         schedule.push_back(i);
-      return true;
+      return num_threads > 0;
     }
     
     // "Plain changes" algorithm from Knuth, Combinatorial Algorithms (F2B)

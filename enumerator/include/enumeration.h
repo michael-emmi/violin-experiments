@@ -49,72 +49,104 @@ void Thread::execute(void* context) {
 
 #include "Scheduler.h"
 
-vector<Thread> threads;
-list<void(*)()> pre_listeners, delay_listeners, post_listeners;
+class ExecutionListener {
+public:
+  ExecutionListener() {}
+  virtual void onPreExecute() {}
+  virtual void onPostExecute() {}
+  virtual void onDelay() {}
+};
 
-void register_thread(void (*run)(void*), void *obj) {
-  threads.push_back({.coro = Coro_new(), .run = run, .obj = obj});
-}
-void register_pre(void (*fn)()) {
-  pre_listeners.push_back(fn);
-}
-void unregister_pre(void (*fn)()) {
-  pre_listeners.remove(fn);
-}
-void register_delay(void (*fn)()) {
-  delay_listeners.push_back(fn);
-}
-void unregister_delay(void (*fn)()) {
-  delay_listeners.remove(fn);
-}
-void register_post(void (*fn)()) {
-  post_listeners.push_back(fn);
-}
-void unregister_post(void (*fn)()) {
-  post_listeners.remove(fn);
-}
-void notify(list<void(*)()> listeners) {
-  for (list<void(*)()>::iterator i = listeners.begin();
-       i != listeners.end(); ++i)
-    (*i)();
-}
+class Enumerator {
+protected:
+  vector<Thread> threads;
+  list<ExecutionListener*> listeners;
+  enum execution_event_t { PRE_EXECUTE, POST_EXECUTE, DELAY };
 
-int search(Scheduler &s) {
-  scheduler = Coro_new();
-  Coro_initializeMainCoro(scheduler);
+public:
+  Enumerator() {}
+  Enumerator(vector<Thread> &ts) : threads(ts) {}
 
-
-  while (s.nextSchedule()) {
-    for (vector<Thread>::iterator t = threads.begin(); t != threads.end(); ++t) {
-      Coro_startCoro_(scheduler, current = t->coro, &(*t), &Thread::execute);
-    }
-
-    notify(pre_listeners);
-
-    while (true) {
-      int current_thread = s.nextStep();
-
-      if (current_thread == Scheduler::DONE)
-        break;
-
-      else if (current_thread == Scheduler::DELAY)
-        notify(delay_listeners);
-
-      else if (Resume(threads[current_thread].coro))
-        s.completed();
-    }
-
-    notify(post_listeners);
+  vector<Thread> &getThreads() {
+    return threads;
   }
-  return 0;
-}
+  void addThread(void (*run)(void*), void *obj) {
+    threads.push_back({.coro = Coro_new(), .run = run, .obj = obj});
+  }
+  void addListener(ExecutionListener *l) {
+    listeners.push_back(l);
+  }
+  void removeListener(ExecutionListener *l) {
+    listeners.remove(l);
+  }
+  virtual void run() = 0;
 
-int search_delay_bounding(int num_delays) {
-  RoundRobinScheduler s(threads, num_delays);
-  return search(s);
-}
+protected:
+  void notify(execution_event_t event) {
+    for (list<ExecutionListener*>::iterator l = listeners.begin();
+        l != listeners.end(); ++l) {
+      switch (event) {
+      case PRE_EXECUTE:
+        (*l)->onPreExecute();
+        break;
+      case POST_EXECUTE:
+        (*l)->onPostExecute();
+        break;
+      case DELAY:
+        (*l)->onDelay();
+        break;
+      }
+    }
+  }
 
-int search_atomic_threads() {
-  AtomicScheduler s(threads);
-  return search(s);
-}
+  int search(Scheduler *s) {
+
+    scheduler = Coro_new();
+    Coro_initializeMainCoro(scheduler);
+
+    while (s->nextSchedule()) {
+
+      for (vector<Thread>::iterator t = threads.begin(); t != threads.end(); ++t) {
+        Coro_startCoro_(scheduler, current = t->coro, &(*t), &Thread::execute);
+      }
+
+      notify(PRE_EXECUTE);
+
+      while (true) {
+        int current_thread = s->nextStep();
+
+        if (current_thread == Scheduler::DONE)
+          break;
+
+        if (current_thread == Scheduler::DELAY) {
+          notify(DELAY);
+          continue;
+        }
+
+        if (Resume(threads[current_thread].coro))
+          s->completed();
+      }
+
+      notify(POST_EXECUTE);
+    }
+    return 0;
+  }
+};
+
+class DelayBoundedEnumerator : public Enumerator {
+  int num_delays;
+public:
+  DelayBoundedEnumerator(int K) : Enumerator(), num_delays(K) { }
+  void run() {
+    search(new RoundRobinScheduler(threads, num_delays));
+  }
+};
+
+class AtomicThreadEnumerator : public Enumerator {
+public:
+  AtomicThreadEnumerator() : Enumerator() { }
+  AtomicThreadEnumerator(vector<Thread> &ts) : Enumerator(ts) { }
+  void run() {
+    search(new AtomicScheduler(threads));
+  }
+};

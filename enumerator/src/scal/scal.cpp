@@ -38,8 +38,8 @@ int max_retries = 2;
 int delay = 2;
 int helping_delay = 2;
 
-Pool<int> *obj;
-int violin_object;
+Pool<int> *obj, *spec_obj;
+int lib_object, spec_object;
 
 enum {
   BK_QUEUE, D_QUEUE, DTS_QUEUE, FC_QUEUE, LB_QUEUE, MS_QUEUE, K_STACK,
@@ -74,7 +74,7 @@ obj_desc objects[] = {
 };
 
 Pool<int>* obj_create(int id) {
-  switch (violin_object) {
+  switch (id) {
   case BK_QUEUE: return new BoundedSizeKFifo<int>(k, num_segments);
   case D_QUEUE: return new DistributedQueue< int, MSQueue<int> >(num_queues,g_num_threads+1,new BalancerPartitionedRoundRobin(partitions,num_queues));
   case DTS_QUEUE: return (Pool<int>*) new DTSQueue<int>();
@@ -123,11 +123,20 @@ violin_order_t obj_order(int id) {
 
 void obj_reset() {
   if (obj) delete obj;
-  obj = obj_create(violin_object);
+  obj = obj_create(lib_object);
+}
+
+void spec_reset() {
+  if (spec_obj) delete spec_obj;
+  spec_obj = obj_create(spec_object);
 }
 
 void obj_add(int v) {
   obj->put(v);
+}
+
+void spec_add(int v) {
+  spec_obj->put(v);
 }
 
 int obj_rem() {
@@ -138,11 +147,19 @@ int obj_rem() {
     return -1;
 }
 
+int spec_rem() {
+  int result;
+  if (spec_obj->get(&result))
+    return result;
+  else
+    return -1;
+}
+
 DEFINE_int32(adds, 1, "how many add operations?");
 DEFINE_int32(removes, 1, "how many remove operations?");
 DEFINE_int32(barriers, 0, "how many barriers?");
 DEFINE_int32(delays, 0, "how many delays?");
-DEFINE_string(mode, "counting", "which mode? {nothing,counting,linearization}");
+DEFINE_string(mode, "counting", "which mode? {nothing,counting,linearization,versus}");
 DEFINE_int32(alloc, 0, "allocation policy? 0=default, 1=LRF, 2=MRF");
 DEFINE_string(show, "all", "show which histories? {all,violations,none}");
 
@@ -167,10 +184,15 @@ int main(int argc, char **argv) {
     exit(-1);
   }
 
-  if ((violin_object = obj_id(argv[1])) < 0) {
+  if ((lib_object = obj_id(argv[1])) < 0) {
     cerr << "Invalid data structure name \"" << argv[1] << "\"; see --help for usage." << endl;
     exit(-1);
   }
+
+  if (obj_order(lib_object) == FIFO_ORDER)
+    spec_object = MS_QUEUE;
+  else
+    spec_object = lib_object;
 
   // TODO are we initializing these correctly?
   // TODO investigate!
@@ -186,6 +208,8 @@ int main(int argc, char **argv) {
     mode = NOTHING_MODE;
   else if (FLAGS_mode.find("lin") != string::npos)
     mode = LINEARIZATIONS_MODE;
+  else if (FLAGS_mode.find("versus") != string::npos)
+    mode = VERSUS_MODE;
   else
     mode = COUNTING_MODE;
 
@@ -204,14 +228,15 @@ int main(int argc, char **argv) {
   else
     show = SHOW_ALL;
 
-  cout << "Selected SCAL data structure: " << obj_name(violin_object) << endl;
+  cout << "Selected SCAL data structure: " << obj_name(lib_object) << endl;
   violin(
-    obj_reset,
-    obj_add, FLAGS_adds,
-    obj_rem, FLAGS_removes,
+    {.initialize = obj_reset, .add = obj_add, .remove = obj_rem},
+    {.initialize = spec_reset, .add = spec_add, .remove = spec_rem},
+    FLAGS_adds,
+    FLAGS_removes,
     mode,
     alloc,
-    obj_order(violin_object),
+    obj_order(lib_object),
     FLAGS_barriers,
     FLAGS_delays,
     show
