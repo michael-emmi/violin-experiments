@@ -288,7 +288,7 @@ int violin(
   time_t start_time, end_time;
   time(&start_time);
   cout << "Enumerating schedules with "
-       << num_adds + num_removes + num_barriers << " threads "
+       << e.getThreads().size() << " threads "
        << "and " << num_delays << " delays..." << endl;
   e.run();
   time(&end_time);
