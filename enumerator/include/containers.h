@@ -4,17 +4,31 @@
 
 class CollectionCountingMonitor : public CountingMonitor {
   const int num_values;
+  string vstring;
 
 public:
   CollectionCountingMonitor(int N, int V)
-    : CountingMonitor(N+1,(2*V+4)), num_values(V) {
+    : CountingMonitor(N,(2*V+4)), num_values(V) {
   }
   void onPreExecute() {
     CountingMonitor::onPreExecute();
+    vstring = "";
   }
   void onPostExecute() {
-    check_violations();
+    if (vstring != "") {
+      hout << vstring;
+      violationCount++;
+      violationFound = true;
+    }
     CountingMonitor::onPostExecute();
+  }
+
+  void onReturn(
+      int op_id, violin_op_t op, int val, int ret_val,
+      int start_time, int end_time) {
+    CountingMonitor::onReturn(op_id,op,val,ret_val,start_time,end_time);
+    if (op == REMOVE_OP)
+      check_violations(ret_val);
   }
 
 private:
@@ -65,13 +79,16 @@ private:
     return exists(method(REMOVE_OP,0,r));
   }
 
-  int total(int m) {
-    int L=0, R=interval_bound;
+  int total(int m, bool includePending=true) {
+    int L = 0, R = interval_bound;
     int count = 0;
-    for (int i=L; i<R; i++)
+    for (int i=L; i<R; i++) {
       for (int j=L; j<R; j++)
         count += counters[m][i][j];
-    return count;
+      if (includePending)
+        count += counters[m][i][interval_bound];
+    }
+    return count; 
   }
 
   int num_added(int v) {
@@ -84,34 +101,34 @@ private:
 
   pair<int,int> span(int m) {
     int L=0, R=interval_bound;
-    int lhs = INFINITY;
-    int rhs = 0;
+    int min = INFINITY;
+    int max = -1;
+    
     for (int i=L; i<R; i++) {
-      if (counters[m][i][interval_bound] > 0)
-        return make_pair(lhs,INFINITY);
-
+      if (counters[m][i][interval_bound] > 0) {
+        min = i;
+        max = INFINITY;
+        goto DONE;
+      }
       for (int j=i; j<R; j++) {
         if (counters[m][i][j] > 0) {
-          lhs = i;
-          rhs = j;
-          goto FOUND_LHS;
+          min = i;
+          goto FOUND_MIN;
         }
       }
     }
-  FOUND_LHS:
-    if (lhs == INFINITY)
-      return make_pair(lhs,rhs);
-
+    goto DONE;
+  FOUND_MIN:
     for (int j=R-1; j>=0; j--) {
       for (int i=j; i>=0; i--) {
         if (counters[m][i][j] > 0) {
-          rhs = (j == interval_bound) ? INFINITY : j;
-          goto FOUND_RHS;
+          max = j;
+          goto DONE;
         }
       }
     }
-  FOUND_RHS:
-    return make_pair(lhs,rhs);
+  DONE:
+    return make_pair(min,max);
   }
 
   bool before(pair<int,int> fst, pair<int,int> snd) {
@@ -150,45 +167,52 @@ private:
       remu = span(method(REMOVE_OP,0,u)),
       addv = span(method(ADD_OP,v,0)),
       remv = span(method(REMOVE_OP,0,v));
-
+      
     switch (violin_order) {
     case LIFO_ORDER:
       return u != v && is_removed(u) && is_removed(v)
         && before(addu,addv) && before(addv,remu) && before(remu,remv);
     case FIFO_ORDER:
       return u != v && is_removed(u) && is_removed(v)
-        && before(addv,addu) && before(addu,remu) && before(remu,remv);
+        && before(addu,addv) && before(remv,remu);
     default:
       return false;
     }
   }
+  
+  void check_violations(int v) {
+    stringstream s;
 
-  void check_violations() {
-    bool found = false;
-
-    for (int v=1; v<=num_values; v++) {
-      if (remove_violation(v)) {
-        hout << "(Rv:" << v << ") ";
-        found = true;
-      }
-      if (current_time()-time_offset < 3) continue;
-      for (int u=1; u<=num_values; u++) {
-        if (u == v) continue;
-        if (order_violation(u,v)) {
-          hout << "(Ov:" << u << "," << v << ") ";
-          found = true;
-        }
-      }
+    if (vstring != "")
+      return;
+    
+    if (v == EMPTY_VAL) {
+      if (current_time()-time_offset >= 2 && remove_empty_violation())
+        vstring = "(Ev) ";
+      return;
     }
 
-    if (current_time() >= 2 && remove_empty_violation()) {
-      hout << "(Ev) ";
-      found = true;
+    if (remove_violation(v)) {
+      s << "(Rv:" << v << ") ";
+      vstring = s.str();
+      return;
     }
 
-    if (found) {
-      violationCount++;
-      violationFound = true;
+    if (current_time()-time_offset < 2)
+      return;
+
+    for (int u=1; u<=num_values; u++) {
+      if (u==v) continue;
+      if (order_violation(u,v)) {
+        s << "(Ov:" << u << "," << v << ") ";
+        vstring = s.str();
+        return;
+      } else if (order_violation(v,u)) {
+        s << "(Ov:" << v << "," << u << ") ";
+        vstring = s.str();
+        return;        
+      }
     }
   }
+
 };

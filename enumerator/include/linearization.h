@@ -113,12 +113,12 @@ private:
     e.run();
     time(&end_time);
 
-    cout << linear_histories.size() << " histories computed in " 
-         << difftime(end_time,start_time) << "s." << endl;
-    for (unordered_set<string>::iterator h = linear_histories.begin();
-         h != linear_histories.end(); ++h) {
-      cout << *h << endl;
-    }
+    // cout << linear_histories.size() << " histories computed in " 
+    //      << difftime(end_time,start_time) << "s." << endl;
+    // for (unordered_set<string>::iterator h = linear_histories.begin();
+    //      h != linear_histories.end(); ++h) {
+    //   cout << *h << endl;
+    // }
   }
 
   string linearization_to_string(vector<OP> l) {

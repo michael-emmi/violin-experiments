@@ -81,10 +81,10 @@ public:
   virtual void onPreExecute() {
     violationFound = false;
   };
-  virtual void onCall(int op_id, violin_op_t op, int val, int start_time) {};
+  virtual void onCall(int op_id, violin_op_t op, int val, int start_time) {}
   virtual void onReturn(
     int op_id, violin_op_t op, int val, int ret_val,
-    int start_time, int end_time) {};
+    int start_time, int end_time) {}
 };
 
 vector<Monitor*> monitors;
@@ -147,7 +147,7 @@ int Add(int op_id, int v) {
   hout << op_id << ":Add! ";
 
   int end_time = current_time();
-
+  
   for (vector<Monitor*>::iterator m = monitors.begin(); m != monitors.end(); ++m)
     (*m)->onReturn(op_id,ADD_OP,v,0,start_time,end_time);
 
@@ -166,6 +166,7 @@ int Remove(int op_id, int v) {
   hout << " ";
 
   int end_time = current_time();
+
   for (vector<Monitor*>::iterator m = monitors.begin(); m != monitors.end(); ++m)
     (*m)->onReturn(op_id,REMOVE_OP,v,r,start_time,end_time);
 
@@ -282,7 +283,7 @@ int violin(
     monitors.push_back(new LinearizationMonitor(num_adds, num_removes));
 
   if (violin_mode == COUNTING_MODE || violin_mode == VERSUS_MODE)
-    monitors.push_back(new CollectionCountingMonitor(num_barriers, num_adds));
+    monitors.push_back(new CollectionCountingMonitor(num_barriers+1, num_adds));
 
   time_t start_time, end_time;
   time(&start_time);
