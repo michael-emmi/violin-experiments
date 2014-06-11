@@ -161,7 +161,7 @@ DEFINE_int32(barriers, 0, "how many barriers?");
 DEFINE_int32(delays, 0, "how many delays?");
 DEFINE_string(mode, "counting", "which mode? {nothing,counting,linearization,versus}");
 DEFINE_int32(alloc, 0, "allocation policy? 0=default, 1=LRF, 2=MRF");
-DEFINE_string(show, "all", "show which histories? {all,violations,none}");
+DEFINE_string(show, "all", "show which histories? {all,wins,violations,none}");
 
 uint64_t g_num_threads;
 
@@ -225,6 +225,8 @@ int main(int argc, char **argv) {
     show = SHOW_NONE;
   else if (FLAGS_show.find("viol") != string::npos)
     show = SHOW_VIOLATIONS;
+  else if (FLAGS_show.find("win") != string::npos)
+    show = SHOW_WINS;
   else
     show = SHOW_ALL;
 
