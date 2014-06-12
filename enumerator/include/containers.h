@@ -53,46 +53,49 @@ private:
     return (r <= num_values) ? (num_values + r - 1) : (2 * num_values + 3);
   }
 
-  int total(int m, bool includePending=true) {
-    int L = 0, R = interval_bound;
+  int total(int m) {
     int count = 0;
-    for (int i=L; i<R; i++) {
-      for (int j=L; j<R; j++)
-        count += counters[idx(m,i,j)];
-      if (includePending)
-        count += counters[idx(m,i,interval_bound)];
-    }
-    return count; 
+    int n = idx(m,interval_bound-1,interval_bound);
+    for (int i=idx(m,0,0); i <= n; i++)
+      count += counters[i];
+    return count;
   }
 
   pair<int,int> span(int m) {
-    int L=0, R=interval_bound;
     int min = INFINITY;
     int max = -1;
-    
-    for (int i=L; i<R; i++) {
-      if (counters[idx(m,i,interval_bound)] > 0) {
+
+    for (int i = 0, offset = idx(m,0,0);
+         i < interval_bound;
+         i++, offset += (interval_bound+1) ) {
+
+      if (counters[offset+interval_bound] > 0) {
         min = i;
         max = INFINITY;
         goto DONE;
       }
-      for (int j=i; j<R; j++) {
-        if (counters[idx(m,i,j)] > 0) {
+      for (int j = i; j < interval_bound; j++) {
+        if (counters[offset + j] > 0) {
           min = i;
           goto FOUND_MIN;
         }
       }
     }
     goto DONE;
+
   FOUND_MIN:
-    for (int j=R-1; j>=0; j--) {
-      for (int i=j; i>=0; i--) {
-        if (counters[idx(m,i,j)] > 0) {
+    for (int j = interval_bound-1; j >= 0; j--) {
+      for (int i = j, offset = idx(m,i,j);
+           i >= 0;
+           i--, offset -= (interval_bound+1)) {
+
+        if (counters[offset] > 0) {
           max = j;
           goto DONE;
         }
       }
     }
+
   DONE:
     return make_pair(min,max);
   }
