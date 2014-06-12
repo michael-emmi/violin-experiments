@@ -54,6 +54,9 @@ public:
   ExecutionListener() {}
   virtual void onPreExecute() {}
   virtual void onPostExecute() {}
+  virtual void onPause(int t) {}
+  virtual void onResume(int t) {}
+  virtual void onComplete(int t) {}
   virtual void onDelay() {}
 };
 
@@ -61,7 +64,7 @@ class Enumerator {
 protected:
   vector<Thread> threads;
   list<ExecutionListener*> listeners;
-  enum execution_event_t { PRE_EXECUTE, POST_EXECUTE, DELAY };
+  enum execution_event_t { PRE_EXECUTE, POST_EXECUTE, PAUSE, RESUME, COMPLETE, DELAY };
 
 public:
   Enumerator() {}
@@ -82,7 +85,7 @@ public:
   virtual void run() = 0;
 
 protected:
-  void notify(execution_event_t event) {
+  void notify(execution_event_t event, int t=0) {
     for (list<ExecutionListener*>::iterator l = listeners.begin();
         l != listeners.end(); ++l) {
       switch (event) {
@@ -91,6 +94,15 @@ protected:
         break;
       case POST_EXECUTE:
         (*l)->onPostExecute();
+        break;
+      case PAUSE:
+        (*l)->onPause(t);
+        break;
+      case RESUME:
+        (*l)->onResume(t);
+        break;
+      case COMPLETE:
+        (*l)->onComplete(t);
         break;
       case DELAY:
         (*l)->onDelay();
@@ -123,8 +135,16 @@ protected:
           continue;
         }
 
-        if (Resume(threads[current_thread].coro))
+        notify(RESUME,current_thread);
+
+        if (Resume(threads[current_thread].coro)) {
           s->completed();
+          notify(COMPLETE,current_thread);
+
+        } else {
+          notify(PAUSE,current_thread);
+        }
+
       }
 
       notify(POST_EXECUTE);

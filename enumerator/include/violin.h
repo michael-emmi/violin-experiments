@@ -221,6 +221,18 @@ public:
     violin_clear_alloc_pool();
   }
 
+  // void onResume(int t) {
+  //   cout << "Resuming " << t << endl;
+  // }
+  // 
+  // void onPause(int t) {
+  //   cout << "Pausing " << t << endl;
+  // }
+  // 
+  // void onComplete(int t) {
+  //   cout << "Completing " << t << endl;
+  // }
+
   void onDelay() {
     hout << "* ";
   }
