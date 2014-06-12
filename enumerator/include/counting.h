@@ -81,8 +81,9 @@ protected:
     if (end_time == INFINITY) {
       counters[m1][start_time][interval_bound]++;
     } else {
+      end_time -= time_offset;
       counters[m1][start_time][interval_bound]--;
-      counters[m2][start_time][end_time-time_offset]++;
+      counters[m2][start_time][end_time]++;
     }
   }
 

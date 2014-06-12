@@ -141,6 +141,8 @@ private:
 
     work_list.push(make_pair(empty_seq,operations));
 
+    // list<string> tries; // XXX for debugging
+
     while (!work_list.empty()) {
       vector<OP> sequence = work_list.front().first;
       list<OP> remaining = work_list.front().second;
@@ -153,6 +155,7 @@ private:
           return;
         } else {
           // cout << ":-X " << linearization_to_string(sequence) << endl;
+          // tries.push_back(linearization_to_string(sequence)); // XXX
           linearizations.push_back(sequence);
           continue;
         }
@@ -178,6 +181,11 @@ private:
         work_list.push(make_pair(sequence2,remaining2));
       }
     }
+    
+    // XXX for debugging
+    // cout << "[failed linearizations]" << endl;
+    // for (list<string>::iterator i = tries.begin(); i != tries.end(); ++i)
+    //   cout << "X. " << (*i) << endl;
   
     hout << "(Lv) ";
     violationFound = true;

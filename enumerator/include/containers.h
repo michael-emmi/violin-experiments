@@ -51,7 +51,7 @@ private:
 
   int method(violin_op_t op, int v, int r) {
     if (op == ADD_OP)
-      return (v <= num_values) ? v-1 : (2 * num_values + 2);
+      return (v <= num_values) ? (v - 1) : (2 * num_values + 2);
 
     if (r == EMPTY_VAL)
       return 2 * num_values;
@@ -59,7 +59,7 @@ private:
     if (r == UNKNOWN_VAL)
       return 2 * num_values + 1;
 
-    return (r <= num_values) ? (num_values + r-1) : (2 * num_values + 3);
+    return (r <= num_values) ? (num_values + r - 1) : (2 * num_values + 3);
   }
 
   bool exists(int m) {
@@ -130,6 +130,10 @@ private:
   DONE:
     return make_pair(min,max);
   }
+  
+  bool exists(pair<int,int> intv) {
+    return intv.second > -1;
+  }
 
   bool before(pair<int,int> fst, pair<int,int> snd) {
     return fst.second < snd.first;
@@ -162,19 +166,26 @@ private:
 
   // THREE barriers required to observe this one.
   bool order_violation(int u, int v) {
+    if (u == v)
+      return false;
+
     pair<int,int>
       addu = span(method(ADD_OP,u,0)),
       remu = span(method(REMOVE_OP,0,u)),
       addv = span(method(ADD_OP,v,0)),
-      remv = span(method(REMOVE_OP,0,v));
+      remv = span(method(REMOVE_OP,0,v)),
+      remuu = span(method(REMOVE_OP,0,UNKNOWN_VAL));
+      
+    if (!exists(addu) || !exists(addv) || !exists(remv))
+      return false;
       
     switch (violin_order) {
     case LIFO_ORDER:
-      return u != v && is_removed(u) && is_removed(v)
-        && before(addu,addv) && before(addv,remu) && before(remu,remv);
+      return before(addv,addu) && before(addu,remv) && before(remv,remu);
     case FIFO_ORDER:
-      return u != v && is_removed(u) && is_removed(v)
-        && before(addu,addv) && before(remv,remu);
+      return before(addu,addv) && (
+        (exists(remu) && before(remv,remu))
+        || (!exists(remu) && before(remv,remuu)));
     default:
       return false;
     }
@@ -198,19 +209,21 @@ private:
       return;
     }
 
-    if (current_time()-time_offset < 2)
-      return;
+    // if (current_time()-time_offset < 1)
+      // return;
 
     for (int u=1; u<=num_values; u++) {
       if (u==v) continue;
       if (order_violation(u,v)) {
+        hout << "X ";
         s << "(Ov:" << u << "," << v << ") ";
         vstring = s.str();
         return;
       } else if (order_violation(v,u)) {
+        hout << "X ";
         s << "(Ov:" << v << "," << u << ") ";
         vstring = s.str();
-        return;        
+        return;
       }
     }
   }
