@@ -7,25 +7,17 @@ class CountingMonitor : public Monitor {
 protected:
   const int num_methods;
   const int interval_bound;
-  int ***counters;
+  int *counters;
   int time_offset, last_time;
 
 public:
-  CountingMonitor(int N, int M) : Monitor("Operation-Counting"), interval_bound(N), num_methods(M) {
-    counters = new int**[M];
-    for (int m=0; m<M; m++) {
-      counters[m] = new int*[interval_bound];
-      for (int i=0; i<interval_bound; i++) {
-        counters[m][i] = new int[interval_bound+1];
-      }
-    }
-  }
+  CountingMonitor(int N, int M)
+    : Monitor("Operation-Counting"),
+      interval_bound(N), num_methods(M), counters(new int[N*(N+1)*M]) { }
+
   virtual void onPreExecute() {
     Monitor::onPreExecute();
-    for (int m=0; m<num_methods; m++)
-      for (int i=0; i<interval_bound; i++)
-        for (int j=0; j<interval_bound+1; j++)
-          counters[m][i][j] = 0;
+    memset(counters, 0, num_methods * interval_bound * (interval_bound+1) * sizeof(int));
     last_time = 0;
     time_offset = 0;
   }
@@ -44,6 +36,19 @@ public:
 protected:
   virtual int method(violin_op_t op, int i, int j) = 0;
 
+  inline int idx(int m, int i, int j) {
+    return
+      m * interval_bound * (interval_bound+1)
+      + i * (interval_bound+1)
+      + j;
+  }
+  inline int offset(int m, int i, int j) {
+    return
+      m * interval_bound * (interval_bound+1) * sizeof(int)
+      + i * (interval_bound+1) * sizeof(int)
+      + j * sizeof(int);
+  }
+
   void shift_counters() {
     for (int m=0; m<num_methods; m++) {
       for (int i=0; i<interval_bound; i++) {
@@ -52,13 +57,13 @@ protected:
             continue;
           int ti = i>0 ? i-1 : 0;
           int tj = j>0 ? j-1 : 0;
-          counters[m][ti][tj] += counters[m][i][j];
-          counters[m][i][j] = 0;
+          counters[idx(m,ti,tj)] += counters[idx(m,i,j)];
+          counters[idx(m,i,j)] = 0;
         }
       }
       for (int i=1; i<interval_bound; i++) {
-        counters[m][i-1][interval_bound] += counters[m][i][interval_bound];
-        counters[m][i][interval_bound] = 0;
+        counters[idx(m,i-1,interval_bound)] += counters[idx(m,i,interval_bound)];
+        counters[idx(m,i,interval_bound)] = 0;
       }
     }
   }
@@ -79,11 +84,11 @@ protected:
     int m1 = method(op,v,UNKNOWN_VAL);
     int m2 = method(op,v,r);
     if (end_time == INFINITY) {
-      counters[m1][start_time][interval_bound]++;
+      counters[idx(m1,start_time,interval_bound)]++;
     } else {
       end_time -= time_offset;
-      counters[m1][start_time][interval_bound]--;
-      counters[m2][start_time][end_time]++;
+      counters[idx(m1,start_time,interval_bound)]--;
+      counters[idx(m2,start_time,end_time)]++;
     }
   }
 
@@ -105,7 +110,7 @@ protected:
         cout << i << " |";
         for (int j=0; j<interval_bound+1; j++) {
           if (i <= j)
-            cout << " " << counters[m][i][j];
+            cout << " " << counters[idx(m,i,j)];
           else
             cout << " .";
         }

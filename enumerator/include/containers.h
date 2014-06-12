@@ -4,31 +4,22 @@
 
 class CollectionCountingMonitor : public CountingMonitor {
   const int num_values;
-  string vstring;
+
+  bool check_empty_violations;
+  bool check_order_violations;
+  bool check_remove_violations;
 
 public:
   CollectionCountingMonitor(int N, int V)
-    : CountingMonitor(N,(2*V+4)), num_values(V) {
-  }
-  void onPreExecute() {
-    CountingMonitor::onPreExecute();
-    vstring = "";
-  }
+    : CountingMonitor(N,(2*V+4)),
+      num_values(V),
+      check_empty_violations(true),
+      check_order_violations(true),
+      check_remove_violations(true)
+    { }
   void onPostExecute() {
-    if (vstring != "") {
-      hout << vstring;
-      violationCount++;
-      violationFound = true;
-    }
+    check_violations();
     CountingMonitor::onPostExecute();
-  }
-
-  void onReturn(
-      int op_id, violin_op_t op, int val, int ret_val,
-      int start_time, int end_time) {
-    CountingMonitor::onReturn(op_id,op,val,ret_val,start_time,end_time);
-    if (op == REMOVE_OP)
-      check_violations(ret_val);
   }
 
 private:
@@ -62,41 +53,16 @@ private:
     return (r <= num_values) ? (num_values + r - 1) : (2 * num_values + 3);
   }
 
-  bool exists(int m) {
-    int L=0, R=interval_bound;
-    for (int i=L; i<R; i++)
-      for (int j=L; j<R; j++)
-        if (counters[m][i][j])
-          return true;
-    return false;
-  }
-
-  bool is_added(int v) {
-    return exists(method(ADD_OP,v,0));
-  }
-
-  bool is_removed(int r) {
-    return exists(method(REMOVE_OP,0,r));
-  }
-
   int total(int m, bool includePending=true) {
     int L = 0, R = interval_bound;
     int count = 0;
     for (int i=L; i<R; i++) {
       for (int j=L; j<R; j++)
-        count += counters[m][i][j];
+        count += counters[idx(m,i,j)];
       if (includePending)
-        count += counters[m][i][interval_bound];
+        count += counters[idx(m,i,interval_bound)];
     }
     return count; 
-  }
-
-  int num_added(int v) {
-    return total(method(ADD_OP,v,0));
-  }
-
-  int num_removed(int r) {
-    return total(method(REMOVE_OP,0,r));
   }
 
   pair<int,int> span(int m) {
@@ -105,13 +71,13 @@ private:
     int max = -1;
     
     for (int i=L; i<R; i++) {
-      if (counters[m][i][interval_bound] > 0) {
+      if (counters[idx(m,i,interval_bound)] > 0) {
         min = i;
         max = INFINITY;
         goto DONE;
       }
       for (int j=i; j<R; j++) {
-        if (counters[m][i][j] > 0) {
+        if (counters[idx(m,i,j)] > 0) {
           min = i;
           goto FOUND_MIN;
         }
@@ -121,7 +87,7 @@ private:
   FOUND_MIN:
     for (int j=R-1; j>=0; j--) {
       for (int i=j; i>=0; i--) {
-        if (counters[m][i][j] > 0) {
+        if (counters[idx(m,i,j)] > 0) {
           max = j;
           goto DONE;
         }
@@ -139,28 +105,27 @@ private:
     return fst.second < snd.first;
   }
 
-  bool present_during(int v, pair<int,int> intv) {
-    return is_added(v)
-        && before(span(method(ADD_OP,v,0)), intv)
-        && before(intv, span(method(REMOVE_OP,0,v)));
-  }
-
   bool remove_violation(int r) {
     if (r == EMPTY_VAL || r == UNKNOWN_VAL) return false;
-    return num_added(r) < num_removed(r);
+    int n = total(method(REMOVE_OP,0,r));
+    return n > 0 && n > total(method(ADD_OP,r,0));
   }
 
   // TWO barriers required to observe this one.
   bool remove_empty_violation() {
-    int L=0, R=interval_bound;
     int m = method(REMOVE_OP,0,EMPTY_VAL);
-    if (!exists(m)) return false;
-    for (int i=L; i<R; i++)
-      for (int j=L; j<R; j++)
-        if (counters[m][i][j] > 0)
-          for (int v=1; v<=num_values; v++)
-            if (present_during(v,make_pair(i,j)))
-              return true;
+    pair<int,int> reme = span(m);
+    if (!exists(reme)) return false;
+
+    for (int v=1; v<=num_values; v++) {
+      pair<int,int>
+        addv = span(method(ADD_OP,v,0)),
+        remv = span(method(REMOVE_OP,0,v));
+      for (int i=reme.first; i<=reme.second; i++)
+        for (int j=reme.first; j<=reme.second; j++)
+          if (counters[idx(m,i,j)] > 0 && addv.second < i && j < remv.first)
+            return true;
+    }
     return false;
   }
 
@@ -190,42 +155,42 @@ private:
       return false;
     }
   }
-  
-  void check_violations(int v) {
-    stringstream s;
 
-    if (vstring != "")
-      return;
-    
-    if (v == EMPTY_VAL) {
-      if (current_time()-time_offset >= 2 && remove_empty_violation())
-        vstring = "(Ev) ";
-      return;
-    }
+  void check_violations() {
 
-    if (remove_violation(v)) {
-      s << "(Rv:" << v << ") ";
-      vstring = s.str();
-      return;
-    }
+    if (check_remove_violations || check_order_violations) {
+      for (int v = 1; v <= num_values; v++) {
+        if (check_remove_violations && remove_violation(v)) {
+          hout << "(Rv:" << v << ") ";
+          goto FOUND;
+        }
 
-    // if (current_time()-time_offset < 1)
-      // return;
+        if (!check_order_violations || current_time()-time_offset < 1)
+          continue;
 
-    for (int u=1; u<=num_values; u++) {
-      if (u==v) continue;
-      if (order_violation(u,v)) {
-        hout << "X ";
-        s << "(Ov:" << u << "," << v << ") ";
-        vstring = s.str();
-        return;
-      } else if (order_violation(v,u)) {
-        hout << "X ";
-        s << "(Ov:" << v << "," << u << ") ";
-        vstring = s.str();
-        return;
+        for (int u = 1; u <= num_values; u++) {
+          if (u == v) continue;
+          if (order_violation(u,v)) {
+            hout << "(Ov:" << u << "," << v << ") ";
+            goto FOUND;
+          }
+        }
       }
     }
+
+    if (check_empty_violations
+        && current_time()-time_offset > 1
+        && remove_empty_violation()) {
+      hout << "(Ev) ";
+      goto FOUND;
+    }
+
+    return;
+
+  FOUND:
+    violationFound = true;
+    violationCount++;
+    return;
   }
 
 };

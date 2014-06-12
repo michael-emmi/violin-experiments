@@ -11,20 +11,25 @@ LIBS += -lcoroutine
 LIBS += -lgflags
 LIB_OBJS = $(patsubst %.cc,%.o,$(wildcard util/*.cc))
 LIBS += $(LIB_OBJS)
+DEPENDS += $(LIB_OBJS)
+DEPENDS += $(wildcard datastructures/*.h)
+DEPENDS += $(wildcard $(ROOT)/include/*.h)
 
 MAIN = scal.cpp
 EXE = $(basename $(MAIN))
 
-$(EXE): $(LIB_OBJS) $(ROOT)/lib/libcoroutine.$(A) $(MAIN)
-	$(CC) $(CCFLAGS) $(INCLUDE) $(LIBS) $(MAIN) -o $@
+$(EXE): $(DEPENDS) $(ROOT)/lib/libcoroutine.$(A) $(MAIN)
+	@echo Building executable: $@
+	@$(CC) $(CCFLAGS) $(INCLUDE) $(LIBS) $(MAIN) -o $@
 
 util/%.o: util/%.cc
-	$(CC) -c $(CCFLAGS) $(INCLUDE) $<
-	mv $(@F) util
+	@$(CC) -c $(CCFLAGS) $(INCLUDE) $<
+	@mv $(@F) util
 
 $(ROOT)/lib/libcoroutine.$(A):
-	cd $(ROOT) && make lib/libcoroutine.$(A)
+	@cd $(ROOT) && make lib/libcoroutine.$(A)
 
 clean:
-	rm -rf $(EXE)
-	rm -rf $(wildcard **/*.o)
+	@echo Removing make-generated files
+	@rm -rf $(EXE)
+	@rm -rf $(wildcard **/*.o)
