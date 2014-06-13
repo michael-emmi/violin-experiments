@@ -1,12 +1,26 @@
 # Violin/Enumerator Experiments
 
-### Current Status
+### Working
 
 * `bqk` / **Bounded-size K FIFO**  
   working
 
 * `dq` / **Distributed Queue**  
-  working; but careful: uses `pthread_getspecific`
+  be careful: uses `pthread_getspecific`
+
+* `msq` / **Michael-Scott Queue**  
+  working
+
+* `rdq` / **Random-dequeue Queue**  
+  working
+
+* `ts` / **Treiber Stack**  
+  seemingly correct
+
+* `ukq` / **Unbounded-size K FIFO**  
+  violations even with atomic operations.
+
+### Not Working
 
 * `dtsq` / **DTS Queue**  
   error -- segmentation fault; uses `pthread_getspecific`, thus incompatible
@@ -20,17 +34,8 @@
 * `lbq` / **Lock-based Queue**  
   blocking :-)
 
-* `msq` / **Michael-Scott Queue**  
-  working
-
-* `rdq` / **Random-dequeue Queue**  
-  working
-
 * `sl` / **Single List**  
   not thread-safe -- segmentation fault
-
-* `ts` / **Treiber Stack**  
-  working, and seemingly correct
 
 * `tsd` / **TS Deque**  
   error -- malloc incorrect checksum for freed object
@@ -40,9 +45,6 @@
 
 * `tsq` / **TS Queue**  
   error -- malloc incorrect checksum for freed object
-
-* `ukq` / **Unbounded-size K FIFO**  
-  working, violations even with atomic operations.
 
 * `wfq11` / **Wait-free Queue (2011)**  
   error -- segmentation fault; uses `pthread_getspecific`, thus incompatible
