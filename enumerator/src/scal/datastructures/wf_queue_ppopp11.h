@@ -193,13 +193,18 @@ void WaitfreeQueue<T>::help_enqueue(uint64_t thread_id, int64_t phase) {
   AtomicPointer<Node*> tail_old;
   AtomicPointer<Node*> next;
   while (is_still_pending(thread_id, phase)) {
+    Yield();
     tail_old = *tail_;
     next = tail_old.value()->next;
+    Yield();
     if (tail_old.raw() == tail_->raw()) {
+      Yield();
       if (next.value() == NULL) {
+        Yield();
         if (is_still_pending(thread_id, phase)) {
           AtomicPointer<Node*> new_next(state_[thread_id]->value()->node,
                                         next.aba() + 1);
+          Yield();
           if (tail_old.value()->next.cas(next, new_next)) {
             help_finish_enqueue();
             return;
@@ -216,9 +221,12 @@ template<typename T>
 void WaitfreeQueue<T>::help_finish_enqueue(void) {
   AtomicPointer<Node*> tail_old = *tail_;
   AtomicPointer<Node*> next = tail_old.value()->next;
+  Yield();
   if (next.value() != NULL) {
+    Yield();
     uint64_t thread_id = next.value()->enq_tid;
     AtomicPointer<OperationDescriptor*> cur_state = *state_[thread_id];
+    Yield();
     if ((tail_old.raw() == tail_->raw())
         && ((state_[thread_id]->value())->node == next.value())) {
       OperationDescriptor *new_desc =
@@ -227,8 +235,10 @@ void WaitfreeQueue<T>::help_finish_enqueue(void) {
                      OperationDescriptor::Type::kEnqueue, next.value());
       AtomicPointer<OperationDescriptor*> new_state(new_desc,
                                                     cur_state.aba() + 1);
+      Yield();
       state_[thread_id]->cas(cur_state, new_state);
       AtomicPointer<Node*> new_tail(next.value(), tail_old.aba() + 1);
+      Yield();
       tail_->cas(tail_old, new_tail);
     }
   }
@@ -259,13 +269,18 @@ void WaitfreeQueue<T>::help_dequeue(uint64_t thread_id, int64_t phase) {
   AtomicPointer<Node*> tail_old;
   AtomicPointer<Node*> next;
   while (is_still_pending(thread_id, phase)) {
+    Yield();
     head_old = *head_;
     tail_old = *tail_;
     next = head_old.value()->next;
+    Yield();
     if (head_->raw() == head_old.raw()) {
+      Yield();
       if (head_old.value() == tail_old.value()) {
+        Yield();
         if (next.value() == NULL) {  // Queue is empty.
           AtomicPointer<OperationDescriptor*> cur_state = *state_[thread_id];
+          Yield();
           if (tail_old.value() == tail_->value()
               && is_still_pending(thread_id, phase)) {
             OperationDescriptor *new_desc =
@@ -276,6 +291,7 @@ void WaitfreeQueue<T>::help_dequeue(uint64_t thread_id, int64_t phase) {
                            NULL);
             AtomicPointer<OperationDescriptor*> new_state(new_desc,
                                                         cur_state.aba() + 1);
+            Yield();
             // If the next CAS fails, another thread changed the state, which
             // is also ok since the descriptor will not indicate pending in the
             // next try.
@@ -285,21 +301,26 @@ void WaitfreeQueue<T>::help_dequeue(uint64_t thread_id, int64_t phase) {
           help_finish_enqueue();
         }
       } else {  // Queue is not empty.
+        Yield();
         AtomicPointer<OperationDescriptor*> cur_state = *state_[thread_id];
         OperationDescriptor *cur_desc = cur_state.value();
         Node *node = cur_desc->node;
+        Yield();
         if (!is_still_pending(thread_id, phase)) {
           break;
         }
+        Yield();
         if (head_->raw() == head_old.raw()
             && node != head_old.value()) {
           OperationDescriptor *new_desc =
               scal::tlget<OperationDescriptor>(kPtrAlignment);
+          Yield();
           new_desc->init(state_[thread_id]->value()->phase, true,
                          OperationDescriptor::Type::kDequeue,
                          head_old.value());
           AtomicPointer<OperationDescriptor*> new_state(new_desc,
               cur_state.aba() + 1);
+          Yield();
           if (!state_[thread_id]->cas(cur_state, new_state)) {
             continue;
           }
@@ -307,6 +328,7 @@ void WaitfreeQueue<T>::help_dequeue(uint64_t thread_id, int64_t phase) {
         // We ignore ABA counter on this one.
         AtomicValue<uint64_t> old_deq_tid(Node::kTidNotSet, 0);
         AtomicValue<uint64_t> new_deq_tid(thread_id, 0);
+        Yield();
         head_old.value()->deq_tid.cas(old_deq_tid, new_deq_tid);
         help_finish_dequeue();
       }
@@ -319,8 +341,10 @@ void WaitfreeQueue<T>::help_finish_dequeue(void) {
   AtomicPointer<Node*> head_old = *head_;
   AtomicPointer<Node*> next = head_old.value()->next;
   uint64_t thread_id = head_old.value()->deq_tid.value();
+  Yield();
   if (thread_id != Node::kTidNotSet) {
     AtomicPointer<OperationDescriptor*> cur_state = *state_[thread_id];
+    Yield();
     if (head_old.raw() == head_->raw()
         && next.value() != NULL) {
       OperationDescriptor *new_desc =
@@ -331,8 +355,10 @@ void WaitfreeQueue<T>::help_finish_dequeue(void) {
                      state_[thread_id]->value()->node);
       AtomicPointer<OperationDescriptor*> new_state(new_desc,
                                                     cur_state.aba() + 1);
+      Yield();
       state_[thread_id]->cas(cur_state, new_state);
       AtomicPointer<Node*> head_new(next.value(), head_old.aba() + 1);
+      Yield();
       head_->cas(head_old, head_new);
     }
   }

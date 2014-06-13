@@ -64,9 +64,13 @@ bool TreiberStack<T>::push(T item) {
   AtomicPointer<Node*> top_new;
   top_new.weak_set_value(n);
   do {
+    Yield();
     top_old = *top_;
+    Yield();
     n->next.weak_set_value(top_old.value());
+    Yield();
     top_new.weak_set_aba(top_old.aba() + 1);
+    Yield();
   } while (!top_->cas(top_old, top_new));
   return true;
 }
@@ -76,13 +80,19 @@ bool TreiberStack<T>::pop(T *item) {
   AtomicPointer<Node*> top_old;
   AtomicPointer<Node*> top_new;
   do {
+    Yield();
     top_old = *top_;
+    Yield();
     if (top_old.value() == NULL) {
       return false;
     }
+    Yield();
     top_new.weak_set_value(top_old.value()->next.value());
+    Yield();
     top_new.weak_set_aba(top_old.aba() + 1);
+    Yield();
   } while (!top_->cas(top_old, top_new));
+  Yield();
   *item = top_old.value()->data;
   return true;
 }

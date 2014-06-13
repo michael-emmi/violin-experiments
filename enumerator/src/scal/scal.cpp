@@ -30,7 +30,7 @@ int k = 2;
 int num_segments = 2;
 int num_queues = 2;
 int partitions = 2;
-int dequeue_mode = 0;
+int dequeue_mode = 0; // from 0,1,2
 int dequeue_timeout = 0;
 int num_ops = 2;
 int quasi_factor = 2;
@@ -58,7 +58,7 @@ obj_desc objects[] = {
   { .id = BK_QUEUE, .order = FIFO_ORDER, .short_name = "bkq", .long_name = "Bounded-size K FIFO" },
   { .id = D_QUEUE, .order = FIFO_ORDER, .short_name = "dq", .long_name = "Distributed Queue" },
   { .id = DTS_QUEUE, .order = FIFO_ORDER, .short_name = "dtsq", .long_name = "DTS Queue" },
-  { .id = FC_QUEUE, .order = FIFO_ORDER, .short_name = "fcq", .long_name = "FC Queue" },
+  { .id = FC_QUEUE, .order = FIFO_ORDER, .short_name = "fcq", .long_name = "Flat-combining Queue" },
   { .id = K_STACK, .order = LIFO_ORDER, .short_name = "ks", .long_name = "K Stack" },
   { .id = LB_QUEUE, .order = FIFO_ORDER, .short_name = "lbq", .long_name = "Lock-based Queue" },
   { .id = MS_QUEUE, .order = FIFO_ORDER, .short_name = "msq", .long_name = "MS Queue" },

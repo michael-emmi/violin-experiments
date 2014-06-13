@@ -78,19 +78,24 @@ RandomDequeueQueue<T>::enqueue(T item) {
   while (true) {
     tail_old = *tail_;
     next = tail_old.value()->next;
+    Yield();
     if (tail_old.raw() == tail_->raw()) {
+      Yield();
       if (next.value() == NULL) {
         AtomicPointer<Node*> next_new(node, next.aba() + 1);
+        Yield();
         if (tail_old.value()->next.cas(next, next_new)) {
           break;
         }
       } else {
         AtomicPointer<Node*> tail_new(next.value(), tail_old.aba() + 1);
+        Yield();
         tail_->cas(tail_old, tail_new);
       }
     }
   }
   AtomicPointer<Node*> tail_new(node, tail_old.aba() + 1);
+  Yield();
   tail_->cas(tail_old, tail_new);
   return true;
 }
@@ -107,12 +112,16 @@ bool RandomDequeueQueue<T>::dequeue(T *item) {
     head_old = *head_;
     tail_old = *tail_;
     next = head_old.value()->next;
+    Yield();
     if (head_->raw() == head_old.raw()) {
+      Yield();
       if (head_old.value() == tail_old.value()) {
+        Yield();
         if (next.value() == NULL) {
           return false;
         }
         AtomicPointer<Node*> tail_new(next.value(), tail_old.aba() + 1);
+        Yield();
         tail_->cas(tail_old, tail_new);
       } else {
         if (retries >= max_retries_) {
@@ -126,9 +135,11 @@ bool RandomDequeueQueue<T>::dequeue(T *item) {
         if (random_index == 0) {
           while (node != NULL && node->deleted == true) {
             AtomicPointer<Node*> head_new(node, head_old.aba() + 1);
+            Yield();
             if (!head_->cas(head_old, head_new) || node == tail_old.value()) {
               goto TOP_WHILE;
             }
+            Yield();
             head_old = head_new;
             next = head_old.value()->next;
             node = next.value();
@@ -136,6 +147,7 @@ bool RandomDequeueQueue<T>::dequeue(T *item) {
           if (node == NULL) {
             return false;
           }
+          Yield();
           if (node->deleted == false &&
               __sync_bool_compare_and_swap(&(node->deleted), false, true)) {
             *item = node->value;
@@ -146,6 +158,7 @@ bool RandomDequeueQueue<T>::dequeue(T *item) {
           for (i = 0; i < random_index && node->next.value() != NULL; ++i) {
             node = node->next.value();
           }
+          Yield();
           if (node->deleted == false &&
               __sync_bool_compare_and_swap(&(node->deleted), false, true)) {
             *item = node->value;
