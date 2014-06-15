@@ -460,21 +460,6 @@ int violin(
   // }
 
   alloc_policy = allocation_policy;
-  bool collect = true;
-
-  if (mode == LINEARIZATIONS_MODE || mode == VERSUS_MODE) {
-    vector<Operation*> spec_ops;
-    for (int i=0; i<num_adds; i++)
-      spec_ops.push_back(new AddOperation(spec_obj.add,i+1));
-    for (int i=0; i<num_removes; i++)
-      spec_ops.push_back(new RemoveOperation(spec_obj.remove));
-    v.monitors.push_back(
-      new LinearizationMonitor(spec_obj, v.operations, spec_ops, collect));
-  }
-
-  if (mode == COUNTING_MODE || mode == VERSUS_MODE)
-    v.monitors.push_back(
-      new CollectionCountingMonitor(num_barriers+1, num_adds, container_order, collect));
 
   cout << "Violin, ";
   switch (mode) {
@@ -490,6 +475,22 @@ int violin(
        << num_delays << " delays."
        << endl;
 
+  if (mode == LINEARIZATIONS_MODE || mode == VERSUS_MODE) {
+    vector<Operation*> spec_ops;
+    for (int i=0; i<num_adds; i++)
+      spec_ops.push_back(new AddOperation(spec_obj.add,i+1));
+    for (int i=0; i<num_removes; i++)
+      spec_ops.push_back(new RemoveOperation(spec_obj.remove));
+    v.monitors.push_back(
+      new LinearizationMonitor(spec_obj, v.operations, spec_ops, mode==VERSUS_MODE));
+  }
+
+  if (mode == COUNTING_MODE || mode == VERSUS_MODE)
+    v.monitors.push_back(
+      new CollectionCountingMonitor(
+        num_barriers+1, num_adds,
+        container_order, mode==VERSUS_MODE));
+
   time_t start_time, end_time;
   time(&start_time);
   cout << "Enumerating schedules with "
@@ -497,41 +498,33 @@ int violin(
        << "and " << num_delays << " delays..." << endl;
   e.run();
   time(&end_time);
+
   cout << num_executions << " schedules enumerated in "
        << difftime(end_time,start_time) << "s." << endl;
-  for (int i=0; i<v.monitors.size(); i++)
-    cout << v.monitors[i]->getName() << " found "
-         << v.monitors[i]->numViolations() << " violations." << endl;
 
-  if (collect) {
-    for (int i=0; i<v.monitors.size(); i++) {
+  for (int i=0; i<v.monitors.size(); i++) {
+    cout << v.monitors[i]->getName() << " found "
+         << v.monitors[i]->numViolations() << " bad executions";
+
+    if (mode == VERSUS_MODE) {
       unordered_set<History*> &bads = v.monitors[i]->getBadHistories();
-      cout << v.monitors[i]->getName() << " got " << bads.size() << " bad histories." << endl;
-      int covered = 0;
-      for (unordered_set<History*>::iterator h = bads.begin(); h != bads.end(); ++h) {
-        if (i+1 < v.monitors.size()) {
-          bool found = false;
-          unordered_set<History*> &weak = v.monitors[i+1]->getBadHistories();
-          for (unordered_set<History*>::iterator wh = weak.begin(); wh != weak.end(); ++wh) {
-            if (**wh <= **h) {
-              found = true;
+      cout << " / " << bads.size() << " histories";
+      if (i+1 < v.monitors.size()) {
+        Monitor *nextM = v.monitors[i+1];
+        int numCovered = 0;
+        unordered_set<History*> &nextBads = nextM->getBadHistories();
+        for (unordered_set<History*>::iterator h = bads.begin(); h != bads.end(); ++h) {
+          for (unordered_set<History*>::iterator w = nextBads.begin(); w != nextBads.end(); ++w) {
+            if (**w <= **h) {
+              numCovered++;
               break;
             }
           }
-          if (found) {
-            cout << "+ ";
-            covered++;
-          } else {
-            cout << "- ";
-          }
         }
-        cout << (*h)->toString() << endl;
+        cout << "; " << nextM->getName() << " covers " << numCovered;
       }
-      if (i+1 < v.monitors.size())
-        cout << covered << " of " << bads.size() << " bad histories covered by "
-             << v.monitors[i+1]->getName()
-             << " (with " << num_barriers << " barriers)" << "." << endl;
     }
+    cout << "." << endl;
   }
 
   return 0;
