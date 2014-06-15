@@ -10,8 +10,8 @@ class CollectionCountingMonitor : public CountingMonitor {
   bool check_remove_violations;
 
 public:
-  CollectionCountingMonitor(int N, int V, violin_order_t ord)
-    : CountingMonitor(N,(2*V+5)),
+  CollectionCountingMonitor(int N, int V, violin_order_t ord, bool collect)
+    : CountingMonitor(N,(2*V+5),collect),
       num_values(V),
       violin_order(ord),
       check_empty_violations(true),
@@ -47,6 +47,7 @@ private:
   }
 
   int remove_method(int r, bool pending=false) {
+    if (r == UNKNOWN_VAL) pending = true;
     if (pending) return 2 * num_values + 1;
     if (r == EMPTY_VAL) return 2 * num_values;
     return (r <= num_values) ? (num_values + r - 1) : (2 * num_values + 3);
@@ -203,7 +204,57 @@ private:
   FOUND:
     vstring = s.str();
     violationCount++;
+    if (collect_bad_histories)
+      bad_histories.insert(historyOfCounters());
     return;
+  }
+
+  History *historyOfCounters() {
+    vector<Operation*> ops;
+    for (int i = 0; i < interval_bound; i++) {
+      for (int j = 0; j <= interval_bound; j++) {
+        int m;
+
+        for (int v = 1; v <= num_values; v++) {
+          m = add_method(v);
+          for (int k = 0; k < counters[idx(m,i,j)]; k++) {
+            Operation *op = new AddOperation(NULL,v);
+            op->start(i);
+            op->end(j == interval_bound ? OMEGA : j);
+            ops.push_back(op);
+          }
+        }
+
+        for (int v = 1; v <= num_values; v++) {
+          m = remove_method(v);
+          for (int k = 0; k < counters[idx(m,i,j)]; k++) {
+            RemoveOperation *op = new RemoveOperation(NULL);
+            op->start(i);
+            op->end(j == interval_bound ? OMEGA : j);
+            op->setResult(v);
+            ops.push_back(op);
+          }
+        }
+
+        m = remove_method(EMPTY_VAL);
+        for (int k = 0; k < counters[idx(m,i,j)]; k++) {
+          RemoveOperation *op = new RemoveOperation(NULL);
+          op->start(i);
+          op->end(j == interval_bound ? OMEGA : j);
+          op->setResult(EMPTY_VAL);
+          ops.push_back(op);
+        }
+
+        m = remove_method(UNKNOWN_VAL);
+        for (int k = 0; k < counters[idx(m,i,j)]; k++) {
+          Operation *op = new RemoveOperation(NULL);
+          op->start(i);
+          op->end(j == interval_bound ? OMEGA : j);
+          ops.push_back(op);
+        }
+      }
+    }
+    return new History(ops);
   }
 
 };

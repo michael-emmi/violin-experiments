@@ -35,12 +35,14 @@ class LinearizationMonitor : public Monitor {
   vector<Operation*> &operations;
   vector<Operation*> &spec_operations;
   unordered_set<string> valid_linear_histories;
-  unordered_set<History> executed_histories;
   const bool debug = false;
 
 public:
-  LinearizationMonitor( Object spec_obj, vector<Operation*> &ops, vector<Operation*> &spec_ops)
-    : Monitor("Line-Up"), spec_object(spec_obj), operations(ops), spec_operations(spec_ops) {
+  LinearizationMonitor(
+    Object spec_obj, vector<Operation*> &ops,
+    vector<Operation*> &spec_ops, bool collect)
+    : Monitor("Line-Up", collect), spec_object(spec_obj),
+      operations(ops), spec_operations(spec_ops) {
     computeSequentialHistories();
   }
   void onPostExecute() {
@@ -143,6 +145,9 @@ private:
   
     vstring = "(Lv)";
     violationCount++;
+    if (collect_bad_histories) {
+      bad_histories.insert(new History(operations));
+    }
 
     // hout << "(" << linearizations.size() << "Ls) ";
 

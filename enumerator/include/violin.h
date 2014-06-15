@@ -39,6 +39,7 @@
 
 #include <iostream>
 #include <vector>
+#include <unordered_set>
 #include <time.h>
 
 #include "enumeration.h"
@@ -74,8 +75,16 @@ public:
   virtual string callString() = 0;
   virtual string retString() = 0;
   virtual string toString() = 0;
+  int getId() const { return id; }
   int startTime() { return start_time; }
   int endTime() { return end_time; }
+  virtual void copy(Operation &op) {
+    id = op.id;
+    start_time = op.start_time;
+    end_time = op.end_time;
+  }
+  virtual Operation *clone() = 0;
+  virtual size_t hash() const { return start_time * end_time; }
 };
 
 int Operation::unique_id = 0;
@@ -94,9 +103,7 @@ public:
   int getParameter() const { return parameter; }
   bool equivalent(const Operation &o) const {
     const AddOperation *add = dynamic_cast<const AddOperation*>(&o);
-    if (!add)
-      return false;
-    return add->parameter == parameter;
+    return add && add->parameter == parameter;
   }
   void run() {
     addFn(parameter);
@@ -116,6 +123,11 @@ public:
     s << "Add(" << parameter << ")";
     return s.str();
   }
+  Operation * clone() {
+    AddOperation *c = new AddOperation(addFn,parameter);
+    c->copy(*this);
+    return c;
+  }
 };
 
 class RemoveOperation : public Operation {
@@ -127,11 +139,10 @@ public:
   int getResult() const { return result; }
   bool equivalent(const Operation &o) const {
     const RemoveOperation *rem = dynamic_cast<const RemoveOperation*>(&o);
-    if (!rem)
-      return false;
-    return rem->result == result;
+    return rem && rem->result == result;
   }
   void reset() { Operation::reset(); result = UNKNOWN_VAL; }
+  void setResult(int r) { result = r; }
   void run() {
     result = removeFn();
   }
@@ -156,6 +167,12 @@ public:
     s << ")";
     return s.str();
   }
+  Operation * clone() {
+    RemoveOperation *c = new RemoveOperation(removeFn);
+    c->copy(*this);
+    c->result = result;
+    return c;
+  }
 };
 
 // class Tick : public Operation {
@@ -169,12 +186,34 @@ public:
 //   }
 // };
 
+bool h_order(Operation* lhs, Operation *rhs) {
+  const AddOperation *addl = dynamic_cast<AddOperation*>(lhs);
+  const AddOperation *addr = dynamic_cast<AddOperation*>(rhs);
+  if (addl && !addr) return true;
+  if (!addl && addr) return false;
+  if (addl && addr) return addl->getParameter() < addr->getParameter();
+  const RemoveOperation *reml = dynamic_cast<RemoveOperation*>(lhs);
+  const RemoveOperation *remr = dynamic_cast<RemoveOperation*>(rhs);
+  if (reml && !remr) return true;
+  if (!reml && remr) return false;
+  if (reml && remr) return reml->getResult() < remr->getResult();
+  if (lhs->startTime() < rhs->startTime()) return true;
+  if (lhs->startTime() > rhs->startTime()) return false;
+  if (lhs->endTime() < rhs->endTime()) return true;
+  if (lhs->endTime() > rhs->endTime()) return false;
+  return lhs->getId() < rhs->getId();
+}
+
 class History {
-  vector<Operation> ops;
-  bool violation;
+  vector<Operation*> ops;
 public:
-  History() {}
-  const Operation& operator[](int idx) const { return ops[idx]; }
+  History(vector<Operation*> operations) {
+    for (int i=0; i<operations.size(); i++) {
+      ops.push_back(operations[i]->clone());
+    }
+    sort(ops.begin(), ops.end(), h_order);
+  }
+  const Operation& operator[](int idx) const { return *ops[idx]; }
   unsigned size() const { return ops.size(); }
   bool operator==(const History &h) const { return compare(h,true); }
   bool operator<=(const History &h) const { return compare(h,false); }
@@ -193,17 +232,37 @@ public:
     }
     return true;
   }
+  size_t hash() const {
+    size_t h=0;
+    for (size_t i=0; i<ops.size(); i++) {
+      h = h*i + ops[i]->hash(); 
+    }
+    return h;
+  }
+  string toString() const {
+    stringstream s;
+    for (int i=0; i<ops.size(); i++) {
+      s << ops[i]->toString() 
+        << "[" << ops[i]->startTime() << "," << ops[i]->endTime() << "] ";
+    }
+    return s.str();
+  }
 };
 
 namespace std {
-  template<> struct hash<Operation> {
-    size_t operator()(Operation const &op) const noexcept {
-      return 0;
+  template<> struct hash<Operation*> {
+    size_t operator()(Operation const *op) const noexcept {
+      return op->hash();
     }
   };
-  template<> struct hash<History> {
-    size_t operator()(History const &h) const noexcept {
-      return 0;
+  template<> struct hash<History*> {
+    size_t operator()(History const *h) const noexcept {
+      return h->hash();
+    }
+  };
+  template<> struct equal_to<History*> {
+    bool operator()(History const *lhs, History const *rhs) {
+      return *lhs == *rhs;
     }
   };
 }
@@ -213,14 +272,18 @@ protected:
   string name;
   string vstring;
   int violationCount;
+  const bool collect_bad_histories;
+  unordered_set<History*> bad_histories;
 public:
-  Monitor(string n) : name(n), violationCount(0) { }
+  Monitor(string n, bool collect)
+    : name(n), violationCount(0), collect_bad_histories(collect) { }
   string getName() { return name; }
   string violation() { return vstring; }
   int numViolations() { return violationCount; }
   virtual void onPreExecute() { vstring = ""; };
   virtual void onCall(Operation *op) {}
   virtual void onReturn(Operation *op) {}
+  unordered_set<History*> &getBadHistories() { return bad_histories; }
 };
 
 struct Object {
@@ -357,6 +420,7 @@ int violin(
   // }
 
   alloc_policy = allocation_policy;
+  bool collect = true;
 
   if (mode == LINEARIZATIONS_MODE || mode == VERSUS_MODE) {
     vector<Operation*> spec_ops;
@@ -365,12 +429,12 @@ int violin(
     for (int i=0; i<num_removes; i++)
       spec_ops.push_back(new RemoveOperation(spec_obj.remove));
     v.monitors.push_back(
-      new LinearizationMonitor(spec_obj, v.operations, spec_ops));
+      new LinearizationMonitor(spec_obj, v.operations, spec_ops, collect));
   }
 
   if (mode == COUNTING_MODE || mode == VERSUS_MODE)
     v.monitors.push_back(
-      new CollectionCountingMonitor(num_barriers+1, num_adds, container_order));
+      new CollectionCountingMonitor(num_barriers+1, num_adds, container_order, collect));
 
   cout << "Violin, ";
   switch (mode) {
@@ -398,5 +462,30 @@ int violin(
   for (int i=0; i<v.monitors.size(); i++)
     cout << v.monitors[i]->getName() << " found "
          << v.monitors[i]->numViolations() << " violations." << endl;
+
+  if (collect) {
+    for (int i=0; i<v.monitors.size(); i++) {
+      unordered_set<History*> &bads = v.monitors[i]->getBadHistories();
+      cout << v.monitors[i]->getName() << " got " << bads.size() << " bad histories." << endl;
+      for (unordered_set<History*>::iterator h = bads.begin(); h != bads.end(); ++h) {
+        if (i+1 < v.monitors.size()) {
+          bool found = false;
+          unordered_set<History*> &weak = v.monitors[i+1]->getBadHistories();
+          for (unordered_set<History*>::iterator wh = weak.begin(); wh != weak.end(); ++wh) {
+            if (**wh <= **h) {
+              found = true;
+              break;
+            }
+          }
+          if (found)
+            cout << "+ ";
+          else
+            cout << "- ";
+        }
+        cout << (*h)->toString() << endl;
+      }
+    }
+  }
+
   return 0;
 }
