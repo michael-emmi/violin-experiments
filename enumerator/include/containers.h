@@ -46,9 +46,9 @@ private:
     return (v <= num_values) ? (v - 1) : (2 * num_values + 2);
   }
 
-  int remove_method(int r) {
+  int remove_method(int r, bool pending=false) {
+    if (pending) return 2 * num_values + 1;
     if (r == EMPTY_VAL) return 2 * num_values;
-    if (r == UNKNOWN_VAL) return 2 * num_values + 1;
     return (r <= num_values) ? (num_values + r - 1) : (2 * num_values + 3);
   }
 
@@ -57,7 +57,7 @@ private:
     if (add) return add_method(add->getParameter());
 
     RemoveOperation *rem = dynamic_cast<RemoveOperation*>(op);
-    if (rem) return remove_method(rem->getResult());
+    if (rem) return remove_method(rem->getResult(), rem->endTime() == OMEGA);
 
     return 2 * num_values + 4;
   }
@@ -151,7 +151,7 @@ private:
       remu = span(remove_method(u)),
       addv = span(add_method(v)),
       remv = span(remove_method(v)),
-      remuu = span(remove_method(UNKNOWN_VAL));
+      remuu = span(remove_method(UNKNOWN_VAL,true));
       
     if (!exists(addu) || !exists(addv) || !exists(remv))
       return false;

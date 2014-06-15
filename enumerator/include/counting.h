@@ -9,6 +9,7 @@ protected:
   const int interval_bound;
   int *counters;
   int time_offset, last_time;
+  const bool debug = false;
 
 public:
   CountingMonitor(int N, int M)
@@ -87,6 +88,7 @@ protected:
       op->end(end_time);
       counters[idx(method(op),start_time,end_time-time_offset)]++;
     }
+    if (debug) print_counters();
   }
 
   void print_counters() {

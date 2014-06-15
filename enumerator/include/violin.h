@@ -227,14 +227,15 @@ struct Object {
   void (*initialize)(void);
   void (*add)(int v);
   int (*remove)(void);
-} violin_object, violin_spec_object;
+};
 
 #include "counting.h"
 #include "containers.h"
 #include "linearization.h"
 
 class ViolinListener : public ExecutionListener {
-  int absolute_time;
+  Object object;
+  int time;
   bool return_happened;
   stringstream hout;
   violin_show_t show_histories;
@@ -245,29 +246,21 @@ public:
   vector<Monitor*> monitors;
 
 public:
-  ViolinListener(violin_show_t show)
-    : deterministic_monitor(true), show_histories(show) { }
-
-  void increment_time() {
-    absolute_time++;
-  }
-
-  int current_time() {
-    return absolute_time;
-  }
+  ViolinListener(Object obj, violin_show_t show)
+    : object(obj), deterministic_monitor(true), show_histories(show) { }
 
   void addMonitor(Monitor *m) {
     monitors.push_back(m);
   }
 
   void onPreExecute() {
-    absolute_time = 0;
+    time = 0;
     return_happened = false;
 
     hout.str("");
     hout.clear();
 
-    violin_object.initialize();
+    object.initialize();
 
     for (int i = 0; i < operations.size(); i++)
       operations[i]->reset();
@@ -307,18 +300,18 @@ public:
       return;
 
     if (deterministic_monitor && return_happened) {
-      increment_time();
+      time++;
       return_happened = false;
     }
 
-    op->start(current_time());
+    op->start(time);
     hout << op->callString() << " ";
     for (int i=0; i<monitors.size(); i++) monitors[i]->onCall(op);
   }
 
   void onComplete(int t) {
     Operation *op = operations[t];
-    op->end(current_time());
+    op->end(time);
     hout << op->retString() << " ";
     for (int i=0; i<monitors.size(); i++) monitors[i]->onReturn(op);
     return_happened = true;
@@ -340,11 +333,9 @@ int violin(
     int num_barriers, int num_delays,
     violin_show_t show) {
 
-  violin_object = obj;
-  violin_spec_object = spec_obj;
-
   DelayBoundedEnumerator e(num_delays);
-  ViolinListener v(show);
+  ViolinListener v(obj,show);
+  e.addListener(&v);
 
   for (int i=0; i<num_adds; i++) {
     Operation *op = new AddOperation(obj.add,i+1);
@@ -357,12 +348,6 @@ int violin(
     e.addThread(&Operation::run, (void*) op);
   }
 
-  vector<Operation*> spec_ops;
-  for (int i=0; i<num_adds; i++)
-    spec_ops.push_back(new AddOperation(spec_obj.add,i+1));
-  for (int i=0; i<num_removes; i++)
-    spec_ops.push_back(new RemoveOperation(spec_obj.remove));
-
   // if (!deterministic_monitor) {
   //   for (int i=0; i<num_barriers; i++) {
   //     Operation *op = new Tick();
@@ -371,9 +356,21 @@ int violin(
   //   }
   // }
 
-  e.addListener(&v);
-
   alloc_policy = allocation_policy;
+
+  if (mode == LINEARIZATIONS_MODE || mode == VERSUS_MODE) {
+    vector<Operation*> spec_ops;
+    for (int i=0; i<num_adds; i++)
+      spec_ops.push_back(new AddOperation(spec_obj.add,i+1));
+    for (int i=0; i<num_removes; i++)
+      spec_ops.push_back(new RemoveOperation(spec_obj.remove));
+    v.monitors.push_back(
+      new LinearizationMonitor(spec_obj, v.operations, spec_ops));
+  }
+
+  if (mode == COUNTING_MODE || mode == VERSUS_MODE)
+    v.monitors.push_back(
+      new CollectionCountingMonitor(num_barriers+1, num_adds, container_order));
 
   cout << "Violin, ";
   switch (mode) {
@@ -388,14 +385,6 @@ int violin(
        << num_barriers << " barriers, "
        << num_delays << " delays."
        << endl;
-
-  if (mode == LINEARIZATIONS_MODE || mode == VERSUS_MODE)
-    v.monitors.push_back(
-      new LinearizationMonitor(spec_obj, v.operations, spec_ops));
-
-  if (mode == COUNTING_MODE || mode == VERSUS_MODE)
-    v.monitors.push_back(
-      new CollectionCountingMonitor(num_barriers+1, num_adds, container_order));
 
   time_t start_time, end_time;
   time(&start_time);
