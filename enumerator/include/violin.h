@@ -39,6 +39,7 @@
 
 #include <iostream>
 #include <vector>
+#include <queue>
 #include <unordered_set>
 #include <time.h>
 
@@ -217,7 +218,46 @@ public:
   unsigned size() const { return ops.size(); }
   bool operator==(const History &h) const { return compare(h,true); }
   bool operator<=(const History &h) const { return compare(h,false); }
+
   bool compare(const History &h, bool strict) const {
+    return compare_search_ops(h,strict);
+  }
+
+  bool compare_search_ops(const History &h, bool strict) const {
+    queue< pair< vector<Operation*>, list<Operation*> > > work_list;
+    vector<Operation*> empty;
+    list<Operation*> all(ops.begin(), ops.end());
+    work_list.push(make_pair(empty,all));
+    while (!work_list.empty()) {
+      vector<Operation*> pre = work_list.front().first;
+      list<Operation*> post = work_list.front().second;
+      work_list.pop();
+      if (post.empty()) {
+        History hh(pre);
+        if (hh.compare_fixed_ops(h,strict))
+          return true;
+        else
+          continue;
+      }
+      vector<Operation*> equivs;
+      for (list<Operation*>::iterator op = post.begin(); op != post.end(); ++op) {
+        if (post.front()->equivalent(**op))
+          equivs.push_back(*op);
+        else
+          break;
+      }
+      for (int i=0; i<equivs.size(); i++) {
+        vector<Operation*> pre2(pre);
+        list<Operation*> post2(post);
+        pre2.push_back(equivs[i]);
+        post2.remove(equivs[i]);
+        work_list.push(make_pair(pre2,post2));
+      }
+    }
+    return false;
+  }
+
+  bool compare_fixed_ops(const History &h, bool strict) const {
     // NOTE assume operation IDs determine methods
     if (size() != h.size()) return false;
     for (int i=0; i<size(); i++) {
