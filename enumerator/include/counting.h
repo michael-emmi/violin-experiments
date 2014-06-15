@@ -24,17 +24,11 @@ public:
   virtual void onPostExecute() {
     Monitor::onPostExecute();
   }
-  virtual void onCall(int op_id, violin_op_t op, int val, int start_time) {
-    count(op,val,UNKNOWN_VAL,start_time);
-  }
-  virtual void onReturn(
-      int op_id, violin_op_t op, int val, int ret_val,
-      int start_time, int end_time) {
-    count(op,val,ret_val,start_time,end_time);
-  }
+  virtual void onCall(Operation *op) { count(op); }
+  virtual void onReturn(Operation *op) { count(op); }
 
 protected:
-  virtual int method(violin_op_t op, int i, int j) = 0;
+  virtual int method(Operation *op) = 0;
 
   inline int idx(int m, int i, int j) {
     return
@@ -68,27 +62,30 @@ protected:
     }
   }
 
-  void count(violin_op_t op, int v, int r, int start_time, int end_time = INFINITY) {
-    int now = current_time();
+  void count(Operation *op) {
+    int now = op->endTime();
+    if (now == OMEGA) now = op->startTime();
+
     while (last_time < now) {
       last_time++;
-      if (last_time > time_bound) {
+      if (last_time >= interval_bound) {
         shift_counters();
         time_offset++;
       }
     }
-  
-    start_time -= time_offset;
+
+    int start_time = op->startTime() - time_offset;
     if (start_time < 0) start_time = 0;
-  
-    int m1 = method(op,v,UNKNOWN_VAL);
-    int m2 = method(op,v,r);
-    if (end_time == INFINITY) {
-      counters[idx(m1,start_time,interval_bound)]++;
+
+    if (op->endTime() == OMEGA) {
+      counters[idx(method(op),start_time,interval_bound)]++;
+
     } else {
-      end_time -= time_offset;
-      counters[idx(m1,start_time,interval_bound)]--;
-      counters[idx(m2,start_time,end_time)]++;
+      int end_time = op->endTime();
+      op->unend();
+      counters[idx(method(op),start_time,interval_bound)]--;
+      op->end(end_time);
+      counters[idx(method(op),start_time,end_time-time_offset)]++;
     }
   }
 

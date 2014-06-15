@@ -47,88 +47,181 @@
 using namespace std;
 
 enum violin_order_t { NO_ORDER, LIFO_ORDER, FIFO_ORDER };
-violin_order_t violin_order;
-
 enum violin_mode_t { NOTHING_MODE, COUNTING_MODE, LINEARIZATIONS_MODE, VERSUS_MODE };
-violin_mode_t violin_mode;
-
 enum violin_show_t { SHOW_NONE, SHOW_WINS, SHOW_VIOLATIONS, SHOW_ALL };
-violin_show_t show_histories;
 
-enum violin_op_t { ADD_OP, REMOVE_OP };
-
-const int INFINITY = 9999;
+const int OMEGA = 9999;
 const int EMPTY_VAL = -1;
 const int UNKNOWN_VAL = -2;
-int absolute_time, time_bound;
-bool return_happened;
-bool deterministic_monitor;
 int num_executions;
 int num_violations;
-stringstream hout;
 
-class Monitor : public ExecutionListener {
-protected:
-  string name;
-  bool violationFound;
-  int violationCount;
-
-public:
-  Monitor(string n) : name(n), violationCount(0) { }
-  string getName() { return name; }
-  bool violation() { return violationFound; }
-  int numViolations() { return violationCount; }
-  virtual void onPreExecute() {
-    violationFound = false;
-  };
-  virtual void onCall(int op_id, violin_op_t op, int val, int start_time) {}
-  virtual void onReturn(
-    int op_id, violin_op_t op, int val, int ret_val,
-    int start_time, int end_time) {}
-};
-
-vector<Monitor*> monitors;
-
-void increment_time() {
-  absolute_time++;
-}
-
-int current_time() {
-  return absolute_time;
-}
-
-struct Operation {
-  Operation(int(*f)(int,int), int p, int r)
-    : proc(f), parameter(p), result(r) {
-    id = unique_id++;
-  }
+class Operation {
   static int unique_id;
+protected:
   int id;
   int start_time, end_time;
-  int (*proc)(int,int);
-  int parameter, result;
-  static void run(void *context);
+  Operation() : id(unique_id++) {}
+public:
+  static void run(void*);
+  bool operator<(const Operation &o) const { return end_time < o.start_time; }
+  virtual bool equivalent(const Operation &o) const = 0;
+  virtual void reset() { start_time = OMEGA; end_time = OMEGA; }
+  virtual void start(int t) { start_time = t; end_time = OMEGA; }
+  virtual void unend() { end_time = OMEGA; }
+  virtual void end(int t) { end_time = t; }
+  virtual void run() = 0;
+  virtual string callString() = 0;
+  virtual string retString() = 0;
+  virtual string toString() = 0;
+  int startTime() { return start_time; }
+  int endTime() { return end_time; }
 };
 
 int Operation::unique_id = 0;
 
 void Operation::run(void *context)  {
   Operation *op = (Operation*) context;
-  if (deterministic_monitor && return_happened) {
-    increment_time();
-    return_happened = false;
-  }
-  op->start_time = current_time();
-  op->end_time = INFINITY;
-  op->result = op->proc(op->id,op->parameter);
-  op->end_time = current_time();
-  return_happened = true;
+  op->run();
 }
 
-vector<Operation*> violin_operations;
+class AddOperation : public Operation {
+  void (*addFn)(int);
+  int parameter;
+public:
+  AddOperation(void (*add)(int), int param)
+    : Operation(), addFn(add), parameter(param) {}
+  int getParameter() const { return parameter; }
+  bool equivalent(const Operation &o) const {
+    const AddOperation *add = dynamic_cast<const AddOperation*>(&o);
+    if (!add)
+      return false;
+    return add->parameter == parameter;
+  }
+  void run() {
+    addFn(parameter);
+  }
+  string callString() {
+    stringstream s;
+    s << id << ":Add(" << parameter << ")?";
+    return s.str();
+  }
+  string retString() {
+    stringstream s;
+    s << id << ":Add(" << parameter << ")!";
+    return s.str();
+  }
+  string toString() {
+    stringstream s;
+    s << "Add(" << parameter << ")";
+    return s.str();
+  }
+};
 
-#include "counting.h"
-#include "containers.h"
+class RemoveOperation : public Operation {
+  int (*removeFn)(void);
+  int result;
+public:
+  RemoveOperation(int (*rem)(void))
+    : Operation(), removeFn(rem), result(UNKNOWN_VAL) {}
+  int getResult() const { return result; }
+  bool equivalent(const Operation &o) const {
+    const RemoveOperation *rem = dynamic_cast<const RemoveOperation*>(&o);
+    if (!rem)
+      return false;
+    return rem->result == result;
+  }
+  void reset() { Operation::reset(); result = UNKNOWN_VAL; }
+  void run() {
+    result = removeFn();
+  }
+  string callString() {
+    stringstream s;
+    s << id << ":Rem()?";
+    return s.str();
+  }
+  string retString() {
+    stringstream s;
+    s << id << ":Rem!";
+    if (result == EMPTY_VAL) s << "E";
+    else s << result;
+    return s.str();
+  }
+  string toString() {
+    stringstream s;
+    s << "Rem(";
+    if (result == EMPTY_VAL) s << "E";
+    else if (result == UNKNOWN_VAL) s << "?";
+    else s << result;
+    s << ")";
+    return s.str();
+  }
+};
+
+// class Tick : public Operation {
+// public:
+//   Tick() : Operation() {}
+//   void run() {
+//     increment_time();
+//   }
+//   string toString() {
+//     return "|B|";
+//   }
+// };
+
+class History {
+  vector<Operation> ops;
+  bool violation;
+public:
+  History() {}
+  const Operation& operator[](int idx) const { return ops[idx]; }
+  unsigned size() const { return ops.size(); }
+  bool operator==(const History &h) const { return compare(h,true); }
+  bool operator<=(const History &h) const { return compare(h,false); }
+  bool compare(const History &h, bool strict) const {
+    // NOTE assume operation IDs determine methods
+    if (size() != h.size()) return false;
+    for (int i=0; i<size(); i++) {
+      if (!(*this)[i].equivalent(h[i])) {
+        return false;
+      }
+      for (int j=0; j<size(); j++) {
+        if (i == j) continue;
+        if ((*this)[i] < (*this)[j] && !(h[i] < h[j])) return false;
+        if (strict && h[i] < h[j] && !((*this)[i] < (*this)[j])) return false;
+      }
+    }
+    return true;
+  }
+};
+
+namespace std {
+  template<> struct hash<Operation> {
+    size_t operator()(Operation const &op) const noexcept {
+      return 0;
+    }
+  };
+  template<> struct hash<History> {
+    size_t operator()(History const &h) const noexcept {
+      return 0;
+    }
+  };
+}
+
+class Monitor : public ExecutionListener {
+protected:
+  string name;
+  string vstring;
+  int violationCount;
+public:
+  Monitor(string n) : name(n), violationCount(0) { }
+  string getName() { return name; }
+  string violation() { return vstring; }
+  int numViolations() { return violationCount; }
+  virtual void onPreExecute() { vstring = ""; };
+  virtual void onCall(Operation *op) {}
+  virtual void onReturn(Operation *op) {}
+};
 
 struct Object {
   void (*initialize)(void);
@@ -136,55 +229,36 @@ struct Object {
   int (*remove)(void);
 } violin_object, violin_spec_object;
 
-int Add(int op_id, int v) {
-  int start_time = current_time();
-
-  for (vector<Monitor*>::iterator m = monitors.begin(); m != monitors.end(); ++m)
-    (*m)->onCall(op_id,ADD_OP,v,start_time);
-
-  hout << op_id << ":Add(" << v << ")? ";
-  violin_object.add(v);
-  hout << op_id << ":Add! ";
-
-  int end_time = current_time();
-  
-  for (vector<Monitor*>::iterator m = monitors.begin(); m != monitors.end(); ++m)
-    (*m)->onReturn(op_id,ADD_OP,v,0,start_time,end_time);
-
-  return 0;
-}
-
-int Remove(int op_id, int v) {
-  int start_time = current_time();
-  for (vector<Monitor*>::iterator m = monitors.begin(); m != monitors.end(); ++m)
-    (*m)->onCall(op_id,REMOVE_OP,v,start_time);
-
-  hout << op_id << ":Rem? ";
-  int r = violin_object.remove();
-  hout << op_id << ":Rem" << "!";
-  if (r == EMPTY_VAL) hout << "E"; else hout << r;
-  hout << " ";
-
-  int end_time = current_time();
-
-  for (vector<Monitor*>::iterator m = monitors.begin(); m != monitors.end(); ++m)
-    (*m)->onReturn(op_id,REMOVE_OP,v,r,start_time,end_time);
-
-  return r;
-}
-
-int Tick(int op_id, int v) {
-  hout << "|B| ";
-  increment_time();
-  return 0;
-}
-
+#include "counting.h"
+#include "containers.h"
 #include "linearization.h"
 
 class ViolinListener : public ExecutionListener {
+  int absolute_time;
+  bool return_happened;
+  stringstream hout;
+  violin_show_t show_histories;
+  const bool deterministic_monitor;
 
 public:
-  ViolinListener() { }
+  vector<Operation*> operations;
+  vector<Monitor*> monitors;
+
+public:
+  ViolinListener(violin_show_t show)
+    : deterministic_monitor(true), show_histories(show) { }
+
+  void increment_time() {
+    absolute_time++;
+  }
+
+  int current_time() {
+    return absolute_time;
+  }
+
+  void addMonitor(Monitor *m) {
+    monitors.push_back(m);
+  }
 
   void onPreExecute() {
     absolute_time = 0;
@@ -195,17 +269,23 @@ public:
 
     violin_object.initialize();
 
-    for (vector<Monitor*>::iterator m = monitors.begin(); m != monitors.end(); ++m)
-      (*m)->onPreExecute();
+    for (int i = 0; i < operations.size(); i++)
+      operations[i]->reset();
+
+    for (int i = 0; i < monitors.size(); i++)
+      monitors[i]->onPreExecute();
   }
 
   void onPostExecute() {
     int violations = 0;
 
-    for (vector<Monitor*>::iterator m = monitors.begin(); m != monitors.end(); ++m) {
-      (*m)->onPostExecute();
-      if ((*m)->violation())
+    for (int i=0; i<monitors.size(); i++) {
+      monitors[i]->onPostExecute();
+      string v = monitors[i]->violation();
+      if (v != "") {
+        hout << v << " ";
         violations++;
+      }
     }
 
     num_executions++;
@@ -221,23 +301,33 @@ public:
     violin_clear_alloc_pool();
   }
   
-  // void onResume(int t) {
-  //   cout << "Resuming " << t << endl;
-  // }
-  // 
-  // void onPause(int t) {
-  //   cout << "Pausing " << t << endl;
-  // }
-  // 
-  // void onComplete(int t) {
-  //   cout << "Completing " << t << endl;
-  // }
+  void onResume(int t) {
+    Operation *op = operations[t];
+    if (op->startTime() < OMEGA)
+      return;
+
+    if (deterministic_monitor && return_happened) {
+      increment_time();
+      return_happened = false;
+    }
+
+    op->start(current_time());
+    hout << op->callString() << " ";
+    for (int i=0; i<monitors.size(); i++) monitors[i]->onCall(op);
+  }
+
+  void onComplete(int t) {
+    Operation *op = operations[t];
+    op->end(current_time());
+    hout << op->retString() << " ";
+    for (int i=0; i<monitors.size(); i++) monitors[i]->onReturn(op);
+    return_happened = true;
+  }
 
   void onDelay() {
     hout << "* ";
   }
 };
-
 
 int violin(
     Object obj,
@@ -252,30 +342,38 @@ int violin(
 
   violin_object = obj;
   violin_spec_object = spec_obj;
-  deterministic_monitor = true;
-
-  for (int i=0; i<num_adds; i++)
-    violin_operations.push_back(new Operation(Add,i+1,0));
-
-  for (int i=0; i<num_removes; i++)
-    violin_operations.push_back(new Operation(Remove,0,0));
-
-  if (!deterministic_monitor)
-    for (int i=0; i<num_barriers; i++)
-      violin_operations.push_back(new Operation(Tick,0,0));
-
-  violin_mode = mode;
-  alloc_policy = allocation_policy;
-  violin_order = container_order;
-  time_bound = (mode == COUNTING_MODE || mode == VERSUS_MODE) ? num_barriers : INFINITY;
-  show_histories = show;
 
   DelayBoundedEnumerator e(num_delays);
+  ViolinListener v(show);
 
-  for (vector<Operation*>::iterator op = violin_operations.begin();
-      op != violin_operations.end(); ++op)
-    e.addThread(&Operation::run, (void*) *op);
-  e.addListener(new ViolinListener());
+  for (int i=0; i<num_adds; i++) {
+    Operation *op = new AddOperation(obj.add,i+1);
+    v.operations.push_back(op);
+    e.addThread(&Operation::run, (void*) op);
+  }
+  for (int i=0; i<num_removes; i++) {
+    Operation *op = new RemoveOperation(obj.remove);
+    v.operations.push_back(op);
+    e.addThread(&Operation::run, (void*) op);
+  }
+
+  vector<Operation*> spec_ops;
+  for (int i=0; i<num_adds; i++)
+    spec_ops.push_back(new AddOperation(spec_obj.add,i+1));
+  for (int i=0; i<num_removes; i++)
+    spec_ops.push_back(new RemoveOperation(spec_obj.remove));
+
+  // if (!deterministic_monitor) {
+  //   for (int i=0; i<num_barriers; i++) {
+  //     Operation *op = new Tick();
+  //     v.operations.push_back(op);
+  //     e.addThread(&Operations::run, (void*) op);
+  //   }
+  // }
+
+  e.addListener(&v);
+
+  alloc_policy = allocation_policy;
 
   cout << "Violin, ";
   switch (mode) {
@@ -291,11 +389,13 @@ int violin(
        << num_delays << " delays."
        << endl;
 
-  if (violin_mode == LINEARIZATIONS_MODE || violin_mode == VERSUS_MODE)
-    monitors.push_back(new LinearizationMonitor(num_adds, num_removes));
+  if (mode == LINEARIZATIONS_MODE || mode == VERSUS_MODE)
+    v.monitors.push_back(
+      new LinearizationMonitor(spec_obj, v.operations, spec_ops));
 
-  if (violin_mode == COUNTING_MODE || violin_mode == VERSUS_MODE)
-    monitors.push_back(new CollectionCountingMonitor(num_barriers+1, num_adds));
+  if (mode == COUNTING_MODE || mode == VERSUS_MODE)
+    v.monitors.push_back(
+      new CollectionCountingMonitor(num_barriers+1, num_adds, container_order));
 
   time_t start_time, end_time;
   time(&start_time);
@@ -306,8 +406,8 @@ int violin(
   time(&end_time);
   cout << num_executions << " schedules enumerated in "
        << difftime(end_time,start_time) << "s." << endl;
-  for (vector<Monitor*>::iterator m = monitors.begin(); m != monitors.end(); ++m)
-    cout << (*m)->getName() << " found "
-         << (*m)->numViolations() << " violations." << endl;
+  for (int i=0; i<v.monitors.size(); i++)
+    cout << v.monitors[i]->getName() << " found "
+         << v.monitors[i]->numViolations() << " violations." << endl;
   return 0;
 }

@@ -4,15 +4,16 @@
 
 class CollectionCountingMonitor : public CountingMonitor {
   const int num_values;
-
+  violin_order_t violin_order;
   bool check_empty_violations;
   bool check_order_violations;
   bool check_remove_violations;
 
 public:
-  CollectionCountingMonitor(int N, int V)
-    : CountingMonitor(N,(2*V+4)),
+  CollectionCountingMonitor(int N, int V, violin_order_t ord)
+    : CountingMonitor(N,(2*V+5)),
       num_values(V),
+      violin_order(ord),
       check_empty_violations(true),
       check_order_violations(true),
       check_remove_violations(true)
@@ -39,18 +40,26 @@ private:
   // 2V+1   rem(?)
   // 2V+2   add(*)
   // 2V+3   rem(*)
-
-  int method(violin_op_t op, int v, int r) {
-    if (op == ADD_OP)
-      return (v <= num_values) ? (v - 1) : (2 * num_values + 2);
-
-    if (r == EMPTY_VAL)
-      return 2 * num_values;
+  // 2V+4   ???
   
-    if (r == UNKNOWN_VAL)
-      return 2 * num_values + 1;
+  int add_method(int v) {
+    return (v <= num_values) ? (v - 1) : (2 * num_values + 2);
+  }
 
+  int remove_method(int r) {
+    if (r == EMPTY_VAL) return 2 * num_values;
+    if (r == UNKNOWN_VAL) return 2 * num_values + 1;
     return (r <= num_values) ? (num_values + r - 1) : (2 * num_values + 3);
+  }
+
+  int method(Operation *op) {
+    AddOperation *add = dynamic_cast<AddOperation*>(op);
+    if (add) return add_method(add->getParameter());
+
+    RemoveOperation *rem = dynamic_cast<RemoveOperation*>(op);
+    if (rem) return remove_method(rem->getResult());
+
+    return 2 * num_values + 4;
   }
 
   int total(int m) {
@@ -62,7 +71,7 @@ private:
   }
 
   pair<int,int> span(int m) {
-    int min = INFINITY;
+    int min = OMEGA;
     int max = -1;
 
     for (int i = 0, offset = idx(m,0,0);
@@ -71,7 +80,7 @@ private:
 
       if (counters[offset+interval_bound] > 0) {
         min = i;
-        max = INFINITY;
+        max = OMEGA;
         goto DONE;
       }
       for (int j = i; j < interval_bound; j++) {
@@ -110,20 +119,20 @@ private:
 
   bool remove_violation(int r) {
     if (r == EMPTY_VAL || r == UNKNOWN_VAL) return false;
-    int n = total(method(REMOVE_OP,0,r));
-    return n > 0 && n > total(method(ADD_OP,r,0));
+    int n = total(remove_method(r));
+    return n > 0 && n > total(add_method(r));
   }
 
   // TWO barriers required to observe this one.
   bool remove_empty_violation() {
-    int m = method(REMOVE_OP,0,EMPTY_VAL);
+    int m = remove_method(EMPTY_VAL);
     pair<int,int> reme = span(m);
     if (!exists(reme)) return false;
 
     for (int v=1; v<=num_values; v++) {
       pair<int,int>
-        addv = span(method(ADD_OP,v,0)),
-        remv = span(method(REMOVE_OP,0,v));
+        addv = span(add_method(v)),
+        remv = span(remove_method(v));
       for (int i=reme.first; i<=reme.second; i++)
         for (int j=reme.first; j<=reme.second; j++)
           if (counters[idx(m,i,j)] > 0 && addv.second < i && j < remv.first)
@@ -138,11 +147,11 @@ private:
       return false;
 
     pair<int,int>
-      addu = span(method(ADD_OP,u,0)),
-      remu = span(method(REMOVE_OP,0,u)),
-      addv = span(method(ADD_OP,v,0)),
-      remv = span(method(REMOVE_OP,0,v)),
-      remuu = span(method(REMOVE_OP,0,UNKNOWN_VAL));
+      addu = span(add_method(u)),
+      remu = span(remove_method(u)),
+      addv = span(add_method(v)),
+      remv = span(remove_method(v)),
+      remuu = span(remove_method(UNKNOWN_VAL));
       
     if (!exists(addu) || !exists(addv) || !exists(remv))
       return false;
@@ -160,21 +169,22 @@ private:
   }
 
   void check_violations() {
+    stringstream s;
 
     if (check_remove_violations || check_order_violations) {
       for (int v = 1; v <= num_values; v++) {
         if (check_remove_violations && remove_violation(v)) {
-          hout << "(Rv:" << v << ") ";
+          s << "(Rv:" << v << ")";
           goto FOUND;
         }
 
-        if (!check_order_violations || current_time()-time_offset < 1)
+        if (!check_order_violations || last_time-time_offset < 1)
           continue;
 
         for (int u = 1; u <= num_values; u++) {
           if (u == v) continue;
           if (order_violation(u,v)) {
-            hout << "(Ov:" << u << "," << v << ") ";
+            s << "(Ov:" << u << "," << v << ")";
             goto FOUND;
           }
         }
@@ -182,16 +192,16 @@ private:
     }
 
     if (check_empty_violations
-        && current_time()-time_offset > 1
+        && last_time-time_offset > 1
         && remove_empty_violation()) {
-      hout << "(Ev) ";
+      s << "(Ev)";
       goto FOUND;
     }
 
     return;
 
   FOUND:
-    violationFound = true;
+    vstring = s.str();
     violationCount++;
     return;
   }
