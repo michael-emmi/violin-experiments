@@ -467,6 +467,7 @@ int violin(
     for (int i=0; i<v.monitors.size(); i++) {
       unordered_set<History*> &bads = v.monitors[i]->getBadHistories();
       cout << v.monitors[i]->getName() << " got " << bads.size() << " bad histories." << endl;
+      int covered = 0;
       for (unordered_set<History*>::iterator h = bads.begin(); h != bads.end(); ++h) {
         if (i+1 < v.monitors.size()) {
           bool found = false;
@@ -477,13 +478,19 @@ int violin(
               break;
             }
           }
-          if (found)
+          if (found) {
             cout << "+ ";
-          else
+            covered++;
+          } else {
             cout << "- ";
+          }
         }
         cout << (*h)->toString() << endl;
       }
+      if (i+1 < v.monitors.size())
+        cout << covered << " of " << bads.size() << " bad histories covered by "
+             << v.monitors[i+1]->getName()
+             << " (with " << num_barriers << " barriers)" << "." << endl;
     }
   }
 
