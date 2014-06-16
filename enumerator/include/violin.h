@@ -461,19 +461,21 @@ int violin(
 
   alloc_policy = allocation_policy;
 
-  cout << "Violin, ";
+  cout << "Violin: A Linearization-Violation Detector." << endl;;
+
   switch (mode) {
-    case VERSUS_MODE: cout << "linearization vs. counting"; break;
-    case COUNTING_MODE: cout << "counting"; break;
-    case LINEARIZATIONS_MODE: cout << "linearization"; break;
-    default: cout << "unmonitored"; break;
+    case VERSUS_MODE: cout << "Linearization vs. counting"; break;
+    case COUNTING_MODE: cout << "Counting"; break;
+    case LINEARIZATIONS_MODE: cout << "Linearization"; break;
+    default: cout << "Unmonitored"; break;
   }
   cout << " mode w/ "
        << num_adds << " adds, "
        << num_removes << " removes, "
-       << num_barriers << " barriers, "
-       << num_delays << " delays."
-       << endl;
+       << num_delays << " delays";
+  if (mode == COUNTING_MODE || mode == VERSUS_MODE)
+    cout << ", " << num_barriers << " barriers";
+  cout << "." << endl;
 
   if (mode == LINEARIZATIONS_MODE || mode == VERSUS_MODE) {
     vector<Operation*> spec_ops;
@@ -504,7 +506,7 @@ int violin(
 
   for (int i=0; i<v.monitors.size(); i++) {
     cout << v.monitors[i]->getName() << " found "
-         << v.monitors[i]->numViolations() << " bad executions";
+         << v.monitors[i]->numViolations() << " violations";
 
     if (mode == VERSUS_MODE) {
       unordered_set<History*> &bads = v.monitors[i]->getBadHistories();
