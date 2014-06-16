@@ -493,16 +493,19 @@ int violin(
         num_barriers+1, num_adds,
         container_order, mode==VERSUS_MODE));
 
-  time_t start_time, end_time;
-  time(&start_time);
+  timeval start_time, end_time;
+  gettimeofday(&start_time,0);
   cout << "Enumerating schedules with "
        << e.getThreads().size() << " threads "
        << "and " << num_delays << " delays..." << endl;
   e.run();
-  time(&end_time);
+  gettimeofday(&end_time,0);
+  
+  float diff = round(
+    difftime(end_time.tv_sec,start_time.tv_sec)*100 +
+    difftime(end_time.tv_usec,start_time.tv_usec)/10000)/100;
 
-  cout << num_executions << " schedules enumerated in "
-       << difftime(end_time,start_time) << "s." << endl;
+  cout << num_executions << " schedules enumerated in " << diff << "s." << endl;
 
   for (int i=0; i<v.monitors.size(); i++) {
     cout << v.monitors[i]->getName() << " found "
