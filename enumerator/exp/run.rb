@@ -1,5 +1,9 @@
 #!/usr/bin/env ruby
 
+def timeout
+  "gtimeout 5m"
+end
+
 def data_dir
   File.join File.dirname(__FILE__), "data"
 end
@@ -47,7 +51,7 @@ def object_names; {
 end
 
 def run(object, options = {})
-  `#{scal(object,options)}`
+  `#{timeout} #{scal(object,options)}`
 end
 
 def extract_basic_data(output, data = {})  
@@ -55,6 +59,8 @@ def extract_basic_data(output, data = {})
     /w\/ (\d+) adds, (\d+) removes, (\d+) delays(, (\d+) barriers)?\./.match(output).to_a.map(&:to_i)
   data[:executions], data[:time] =
     /(\d+) schedules enumerated in ([0-9.]+)s\./.match(output){|m| [m[1].to_i, m[2].to_f]}
+  data[:executions] ||= '?'
+  data[:time] ||= '?'
   data
 end
 
@@ -74,6 +80,11 @@ def extract_coverage_data(output, data = {})
     /#{lu} found (\d+) violations \/ (\d+) histories; #{oc} covers (\d+)\./.match(output).to_a.map(&:to_i)
   _, data[:c_executions], data[:c_histories] =
     /#{oc} found (\d+) violations \/ (\d+) histories\./.match(output).to_a.map(&:to_i)
+  data[:bad_executions] ||= '?'
+  data[:bad_histories] ||= '?'
+  data[:covered] ||= '?'
+  data[:c_executions] ||= '?'
+  data[:c_histories] ||= '?'
   data
 end
 
@@ -94,6 +105,11 @@ end
 def wrap(data)
   "\"< echo '#{data.select{|d| if block_given? then yield d else true end}.
   map(&:values).map{|d| d.join(' ')}.join("\\n")}'\""
+end
+
+def color(i)
+  cs = [ :beige, :acquamarine, :turquoise, :coral ]
+  "lc rgb \"#{cs[i]}\""
 end
 
 def plot_history_coverage(opts = {})
@@ -132,9 +148,9 @@ def plot_history_coverage(opts = {})
   set grid y
   set tic scale 0
   plot \
-    #{wrap(data)} using 11 title "Counting Violations" lc rgb "turquoise", \
-    #{wrap(data)} using 9 title "Covered by Counting" lc rgb "aquamarine", \
-    #{wrap(data)} using 8 title "All Violations" lc rgb "beige"
+    #{wrap(data)} using 11 title "Counting Violations" #{color(2)}, \
+    #{wrap(data)} using 9 title "Covered by Counting" #{color(1)}, \
+    #{wrap(data)} using 8 title "All Violations" #{color(0)}
   xxx
 end
 
@@ -156,7 +172,8 @@ def plot_runtimes(opts = {})
   # data = data.sort_by{|d| d[:delays]}
   # data.select!{|d| d[:adds] == opts[:adds] && d[:removes] == opts[:removes]}
   raw_data = data.select{|d| d[:mode] =~ /Unmonitored/}
-  cnt_data = data.select{|d| d[:mode] =~ /Counting/}
+  cnov_data = data.select{|d| d[:mode] =~ /Counting -- no verify/}
+  cnt_data = data.select{|d| d[:mode] =~ /Counting$/}
   lin_data = data.select{|d| d[:mode] =~ /Linearization/}
   gnuplot <<-xxx
   set terminal pdf
@@ -181,10 +198,11 @@ def plot_runtimes(opts = {})
   set grid y
   set tic scale 0
   plot \
-    #{wrap(lin_data)} using 5 title "Executions/1K" lc rgb "beige" w filledcurve x1, \
-    #{wrap(lin_data)} using 6 title "Linearization" lc rgb "coral" w filledcurve x1, \
-    #{wrap(cnt_data)} using 6 title "Operation Counting" lc rgb "aquamarine" w filledcurve x1, \
-    #{wrap(raw_data)} using 6 title "No monitoring" lc rgb "turquoise" w filledcurve x1
+    #{wrap(lin_data)} using 5 title "Executions/1K" #{color(0)} w filledcurve x1, \
+    #{wrap(lin_data)} using 6 title "Linearization" #{color(3)} w filledcurve x1, \
+    #{wrap(cnt_data)} using 6 title "Operation Counting" #{color(1)} w filledcurve x1, \
+    #{wrap(cnov_data)} using 6 title "Operation Counting" #{color(1)} w filledcurve x1, \
+    #{wrap(raw_data)} using 6 title "No monitoring" #{color(2)} w filledcurve x1
   xxx
 end
 
@@ -209,9 +227,10 @@ def generate_data(data_file,opts)
   opts[:mode] ||= ["none"]
   File.open(data_file, "w") do |file|
     file.puts titles(yield nil)
-    opts[:adds].each do |a|
-      opts[:removes].each do |r|
-        opts[:delays].each do |d|
+    opts[:delays].each do |d|
+      puts "* generating data for #{opts[:object]} w/ #{d} delays..."
+      opts[:adds].each do |a|
+        opts[:removes].each do |r|
           opts[:barriers].each do |b|
             opts[:modes].each do |m|
               file.puts(row(yield run(
@@ -235,15 +254,21 @@ def generate_runtime_data(opts)
   generate_data(runtime_data_file(opts[:object]),opts){|d| extract_runtime_data(d)}
 end
 
-# generate_coverage_data(
-#   object: :bkq, mode: "versus",
-#   adds: 1..4, removes: 1..4, delays: 0..4, barriers: 0..4)
-  
-# generate_runtime_data(
-#   object: :bkq, modes: ["none","count","lin"],
-#   adds: 1..4, removes: 1..4, delays: 0..4, barriers: 2..2)
+[:bkq, :dq, :msq, :rdq, :ts, :ukq].each do |obj|
+  puts "Generating runtime data for #{obj}..."
+  generate_runtime_data(
+    object: obj, modes: ["none","counting-no-verify","count","lin"],
+    adds: 1..4, removes: 1..4, delays: 0..5, barriers: 2..2)
+end
 
-plot_runtimes(object: :bkq)
+[:bkq, :dq, :msq, :rdq, :ts, :ukq].each do |obj|
+  puts "Generating coverage data for #{obj}..."
+  generate_coverage_data(
+    object: obj, mode: "versus",
+    adds: 1..4, removes: 1..4, delays: 0..5, barriers: 0..4)
+end
+
+# plot_runtimes(object: :bkq)
 
 
 # (2..4).each do |a|

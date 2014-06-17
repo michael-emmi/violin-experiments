@@ -10,13 +10,15 @@ class CollectionCountingMonitor : public CountingMonitor {
   bool check_remove_violations;
 
 public:
-  CollectionCountingMonitor(int N, int V, violin_order_t ord, bool collect)
+  CollectionCountingMonitor(
+    int N, int V, violin_order_t ord,
+    bool verify, bool collect)
     : CountingMonitor(N,(2*V+5),collect),
       num_values(V),
       violin_order(ord),
-      check_empty_violations(true),
-      check_order_violations(true),
-      check_remove_violations(true)
+      check_empty_violations(verify),
+      check_order_violations(verify),
+      check_remove_violations(verify)
     { }
   void onPostExecute() {
     check_violations();

@@ -49,7 +49,7 @@
 using namespace std;
 
 enum violin_order_t { NO_ORDER, LIFO_ORDER, FIFO_ORDER };
-enum violin_mode_t { NOTHING_MODE, COUNTING_MODE, LINEARIZATIONS_MODE, VERSUS_MODE };
+enum violin_mode_t { NOTHING_MODE, COUNTING_MODE, COUNTING_NO_VERIFY_MODE, LINEARIZATIONS_MODE, VERSUS_MODE };
 enum violin_show_t { SHOW_NONE, SHOW_WINS, SHOW_VIOLATIONS, SHOW_ALL };
 
 const int OMEGA = 9999;
@@ -465,6 +465,7 @@ int violin(
 
   switch (mode) {
     case VERSUS_MODE: cout << "Linearization vs. counting"; break;
+    case COUNTING_NO_VERIFY_MODE: cout << "Counting -- no verify"; break;
     case COUNTING_MODE: cout << "Counting"; break;
     case LINEARIZATIONS_MODE: cout << "Linearization"; break;
     default: cout << "Unmonitored"; break;
@@ -473,7 +474,7 @@ int violin(
        << num_adds << " adds, "
        << num_removes << " removes, "
        << num_delays << " delays";
-  if (mode == COUNTING_MODE || mode == VERSUS_MODE)
+  if (mode == COUNTING_MODE || mode == COUNTING_NO_VERIFY_MODE || mode == VERSUS_MODE)
     cout << ", " << num_barriers << " barriers";
   cout << "." << endl;
 
@@ -487,11 +488,11 @@ int violin(
       new LinearizationMonitor(spec_obj, v.operations, spec_ops, mode==VERSUS_MODE));
   }
 
-  if (mode == COUNTING_MODE || mode == VERSUS_MODE)
+  if (mode == COUNTING_MODE || mode == COUNTING_NO_VERIFY_MODE || mode == VERSUS_MODE)
     v.monitors.push_back(
       new CollectionCountingMonitor(
         num_barriers+1, num_adds,
-        container_order, mode==VERSUS_MODE));
+        container_order, mode!=COUNTING_NO_VERIFY_MODE, mode==VERSUS_MODE));
 
   timeval start_time, end_time;
   gettimeofday(&start_time,0);

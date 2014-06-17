@@ -159,7 +159,7 @@ DEFINE_int32(adds, 1, "how many add operations?");
 DEFINE_int32(removes, 1, "how many remove operations?");
 DEFINE_int32(barriers, 0, "how many barriers?");
 DEFINE_int32(delays, 0, "how many delays?");
-DEFINE_string(mode, "counting", "which mode? {nothing,counting,linearization,versus}");
+DEFINE_string(mode, "counting", "which mode? {nothing,counting,counting-no-verify,linearization,versus}");
 DEFINE_int32(alloc, 0, "allocation policy? 0=default, 1=LRF, 2=MRF");
 DEFINE_string(show, "all", "show which histories? {all,wins,violations,none}");
 
@@ -204,12 +204,14 @@ int main(int argc, char **argv) {
   scal::ThreadContext::assign_context();
 
   violin_mode_t mode;
-  if (FLAGS_mode.find("no") != string::npos)
+  if (FLAGS_mode.find("none") != string::npos)
     mode = NOTHING_MODE;
   else if (FLAGS_mode.find("lin") != string::npos)
     mode = LINEARIZATIONS_MODE;
   else if (FLAGS_mode.find("versus") != string::npos)
     mode = VERSUS_MODE;
+  else if (FLAGS_mode.find("-no-verify") != string::npos)
+    mode = COUNTING_NO_VERIFY_MODE;
   else
     mode = COUNTING_MODE;
 
