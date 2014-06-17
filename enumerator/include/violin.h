@@ -465,7 +465,7 @@ int violin(
 
   switch (mode) {
     case VERSUS_MODE: cout << "Linearization vs. counting"; break;
-    case COUNTING_NO_VERIFY_MODE: cout << "Counting -- no verify"; break;
+    case COUNTING_NO_VERIFY_MODE: cout << "NoVerify"; break;
     case COUNTING_MODE: cout << "Counting"; break;
     case LINEARIZATIONS_MODE: cout << "Linearization"; break;
     default: cout << "Unmonitored"; break;
