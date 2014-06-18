@@ -84,11 +84,11 @@ def extract_coverage_data(output, data = {})
     /#{lu} found (\d+) violations \/ (\d+) histories; #{oc} covers (\d+)\./.match(output).to_a.map(&:to_i)
   _, data[:c_executions], data[:c_histories] =
     /#{oc} found (\d+) violations \/ (\d+) histories\./.match(output).to_a.map(&:to_i)
-  data[:bad_executions] ||= '?'
-  data[:bad_histories] ||= '?'
-  data[:covered] ||= '?'
-  data[:c_executions] ||= '?'
-  data[:c_histories] ||= '?'
+  data[:bad_executions] ||= '-'
+  data[:bad_histories] ||= '-'
+  data[:covered] ||= '-'
+  data[:c_executions] ||= '-'
+  data[:c_histories] ||= '-'
   data
 end
 
@@ -98,8 +98,8 @@ def extract_stress_data(output, data = {})
   data = extract_basic_data(output)
   data[:seq_histories], data[:seq_time] = /(\d+) histories computed in ([0-9.]+)s\./.match(output){|m| [m[1].to_i, m[2].to_f]}
   _, data[:mode] = /(.*) mode w\/ \d+ adds,/.match(output).to_a
-  data[:seq_histories] ||= '?'
-  data[:seq_time] ||= '?'
+  data[:seq_histories] ||= '-'
+  data[:seq_time] ||= '-'
   data
 end
 
@@ -291,7 +291,7 @@ end
   puts "Generating stress data for #{obj}"
   generate_stress_data(
     object: obj, modes: ["none", "counting-no-verify", "counting", "lin"],
-    adds: 1..10, removes: 1..10, delays: 2..2, barriers: 0..5)
+    adds: 1..6, removes: 1..6, delays: 2..2, barriers: 2..2)
 end
 
 # plot_runtimes(object: :bkq)
