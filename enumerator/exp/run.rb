@@ -16,6 +16,10 @@ def coverage_data_file(obj)
   File.join data_dir, "coverage.#{obj}.dat"
 end
 
+def stress_data_file(obj)
+  File.join data_dir, "stress.#{obj}.dat"
+end
+
 def graphs_dir
   File.join File.dirname(__FILE__), "graphs"
 end
@@ -85,6 +89,17 @@ def extract_coverage_data(output, data = {})
   data[:covered] ||= '?'
   data[:c_executions] ||= '?'
   data[:c_histories] ||= '?'
+  data
+end
+
+def extract_stress_data(output, data = {})
+  lu = "Line-Up"
+  oc = "Operation-Counting"
+  data = extract_basic_data(output)
+  data[:seq_histories], data[:seq_time] = /(\d+) histories computed in ([0-9.]+)s\./.match(output){|m| [m[1].to_i, m[2].to_f]}
+  _, data[:mode] = /(.*) mode w\/ \d+ adds,/.match(output).to_a
+  data[:seq_histories] ||= '?'
+  data[:seq_time] ||= '?'
   data
 end
 
@@ -254,18 +269,29 @@ def generate_runtime_data(opts)
   generate_data(runtime_data_file(opts[:object]),opts){|d| extract_runtime_data(d)}
 end
 
-[:bkq, :dq, :msq, :rdq, :ts, :ukq].each do |obj|
-  puts "Generating runtime data for #{obj}..."
-  generate_runtime_data(
-    object: obj, modes: ["none","counting-no-verify","count","lin"],
-    adds: 1..4, removes: 1..4, delays: 0..5, barriers: 2..2)
+def generate_stress_data(opts)
+  generate_data(stress_data_file(opts[:object]),opts){|d| extract_stress_data(d)}
 end
 
-[:bkq, :dq, :msq, :rdq, :ts, :ukq].each do |obj|
-  puts "Generating coverage data for #{obj}..."
-  generate_coverage_data(
-    object: obj, mode: "versus",
-    adds: 1..4, removes: 1..4, delays: 0..5, barriers: 0..4)
+# [:bkq, :dq, :msq, :rdq, :ts, :ukq].each do |obj|
+#   puts "Generating runtime data for #{obj}..."
+#   generate_runtime_data(
+#     object: obj, modes: ["none","counting-no-verify","count","lin"],
+#     adds: 1..4, removes: 1..4, delays: 0..5, barriers: 2..2)
+# end
+
+# [:bkq, :dq, :msq, :rdq, :ts, :ukq].each do |obj|
+#   puts "Generating coverage data for #{obj}..."
+#   generate_coverage_data(
+#     object: obj, mode: "versus",
+#     adds: 1..4, removes: 1..4, delays: 0..5, barriers: 0..4)
+# end
+
+[:msq].each do |obj|
+  puts "Generating stress data for #{obj}"
+  generate_stress_data(
+    object: obj, modes: ["none", "counting-no-verify", "counting", "lin"],
+    adds: 1..10, removes: 1..10, delays: 2..2, barriers: 0..5)
 end
 
 # plot_runtimes(object: :bkq)

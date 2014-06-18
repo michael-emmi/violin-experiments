@@ -62,13 +62,17 @@ private:
     e.addListener(&sel);
 
     cout << "Computing sequential histories... ";
-    time_t start_time, end_time;
-    time(&start_time);
+    timeval start_time, end_time;
+    gettimeofday(&start_time,0);
     e.run();
-    time(&end_time);
+    gettimeofday(&end_time,0);
+
+    float diff = round(
+      difftime(end_time.tv_sec, start_time.tv_sec)*100 +
+      difftime(end_time.tv_usec, start_time.tv_usec)/10000) / 100;
 
     cout << valid_linear_histories.size() << " histories computed in " 
-         << difftime(end_time,start_time) << "s." << endl;
+         << diff << "s." << endl;
 
     if (debug) {
       for (unordered_set<string>::iterator h = valid_linear_histories.begin();
