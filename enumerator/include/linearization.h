@@ -37,19 +37,46 @@ class LinearizationMonitor : public Monitor {
   unordered_set<string> valid_linear_histories;
   const bool debug = false;
 
+  unsigned max_num_linearizations;
+  unsigned total_num_linearizations;
+  unsigned num_queries;
+
 public:
   LinearizationMonitor(
     Object spec_obj, vector<Operation*> &ops,
-    vector<Operation*> &spec_ops, bool collect)
+    vector<Operation*> &spec_ops, bool collect,
+    bool dont_compute_atomic_histories = false)
     : Monitor("Line-Up", collect), spec_object(spec_obj),
-      operations(ops), spec_operations(spec_ops) {
-    computeSequentialHistories();
+      operations(ops), spec_operations(spec_ops),
+      max_num_linearizations(0), total_num_linearizations(0), num_queries(0) {
+
+    if (!dont_compute_atomic_histories)
+      computeSequentialHistories();
   }
   void onPostExecute() {
     check_violations();
   }
   void onCall(Operation *op) { }
   void onReturn(Operation *op) { }
+  
+  string extraInfo() {
+    stringstream s;
+    s << getName() << " performed "
+      << avgLinearizations() << " (avg) / " << maxLinearizations() << " (max)"
+      << " linearizations.";
+    return s.str();
+  }
+
+  unsigned avgLinearizations() {
+    if (num_queries > 0)
+      return total_num_linearizations / num_queries;
+    else
+      return 0;
+  }
+
+  unsigned maxLinearizations() {
+    return max_num_linearizations;
+  }
 
 private:
   void computeSequentialHistories() {
@@ -101,15 +128,22 @@ private:
 
     list<string> tries; // for debugging
 
+    unsigned num_linearizations = 0;
+    num_queries++;
+
     while (!work_list.empty()) {
       list<Operation*> sequence = work_list.front().first;
       list<Operation*> remaining = work_list.front().second;
       work_list.pop();
 
       if (remaining.empty()) {
+        num_linearizations++;
         if (valid_linear_histories.find(linearization_to_string(sequence))
             != valid_linear_histories.end()) {
           // cout << ":-) " << linearization_to_string(sequence) << endl;
+          total_num_linearizations += num_linearizations;
+          if (num_linearizations > max_num_linearizations)
+            max_num_linearizations = num_linearizations;
           return;
         } else {
           // cout << ":-X " << linearization_to_string(sequence) << endl;
@@ -152,6 +186,10 @@ private:
     if (collect_bad_histories) {
       bad_histories.insert(new History(operations));
     }
+
+    total_num_linearizations += num_linearizations;
+    if (num_linearizations > max_num_linearizations)
+      max_num_linearizations = num_linearizations;
 
     // hout << "(" << linearizations.size() << "Ls) ";
 

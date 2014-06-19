@@ -49,7 +49,7 @@
 using namespace std;
 
 enum violin_order_t { NO_ORDER, LIFO_ORDER, FIFO_ORDER };
-enum violin_mode_t { NOTHING_MODE, COUNTING_MODE, COUNTING_NO_VERIFY_MODE, LINEARIZATIONS_MODE, VERSUS_MODE };
+enum violin_mode_t { NOTHING_MODE, COUNTING_MODE, COUNTING_NO_VERIFY_MODE, LINEARIZATIONS_MODE, LIN_SKIP_ATOMIC_MODE, VERSUS_MODE };
 enum violin_show_t { SHOW_NONE, SHOW_WINS, SHOW_VIOLATIONS, SHOW_ALL };
 
 const int OMEGA = 9999;
@@ -320,6 +320,7 @@ public:
   string getName() { return name; }
   string violation() { return vstring; }
   int numViolations() { return violationCount; }
+  virtual string extraInfo() { return ""; }
   virtual void onPreExecute() { vstring = ""; };
   virtual void onCall(Operation *op) {}
   virtual void onReturn(Operation *op) {}
@@ -465,9 +466,10 @@ int violin(
 
   switch (mode) {
     case VERSUS_MODE: cout << "Linearization vs. counting"; break;
-    case COUNTING_NO_VERIFY_MODE: cout << "Counting -- no verify"; break;
+    case COUNTING_NO_VERIFY_MODE: cout << "Counting-no-verify"; break;
     case COUNTING_MODE: cout << "Counting"; break;
     case LINEARIZATIONS_MODE: cout << "Linearization"; break;
+    case LIN_SKIP_ATOMIC_MODE: cout << "Linearization-no-atomic"; break;
     default: cout << "Unmonitored"; break;
   }
   cout << " mode w/ "
@@ -478,14 +480,14 @@ int violin(
     cout << ", " << num_barriers << " barriers";
   cout << "." << endl;
 
-  if (mode == LINEARIZATIONS_MODE || mode == VERSUS_MODE) {
+  if (mode == LINEARIZATIONS_MODE || mode == LIN_SKIP_ATOMIC_MODE || mode == VERSUS_MODE) {
     vector<Operation*> spec_ops;
     for (int i=0; i<num_adds; i++)
       spec_ops.push_back(new AddOperation(spec_obj.add,i+1));
     for (int i=0; i<num_removes; i++)
       spec_ops.push_back(new RemoveOperation(spec_obj.remove));
     v.monitors.push_back(
-      new LinearizationMonitor(spec_obj, v.operations, spec_ops, mode==VERSUS_MODE));
+      new LinearizationMonitor(spec_obj, v.operations, spec_ops, mode==VERSUS_MODE, mode==LIN_SKIP_ATOMIC_MODE));
   }
 
   if (mode == COUNTING_MODE || mode == COUNTING_NO_VERIFY_MODE || mode == VERSUS_MODE)
@@ -531,6 +533,9 @@ int violin(
       }
     }
     cout << "." << endl;
+    string extra = v.monitors[i]->extraInfo();
+    if (extra != "")
+      cout << extra << endl;
   }
 
   return 0;

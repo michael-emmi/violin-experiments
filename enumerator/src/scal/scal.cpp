@@ -206,6 +206,8 @@ int main(int argc, char **argv) {
   violin_mode_t mode;
   if (FLAGS_mode.find("none") != string::npos)
     mode = NOTHING_MODE;
+  else if (FLAGS_mode.find("-skip-atomic") != string::npos)
+    mode = LIN_SKIP_ATOMIC_MODE;
   else if (FLAGS_mode.find("lin") != string::npos)
     mode = LINEARIZATIONS_MODE;
   else if (FLAGS_mode.find("versus") != string::npos)
