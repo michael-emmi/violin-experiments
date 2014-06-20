@@ -16,11 +16,11 @@ lib/libcoroutine.$(A): $(CORO_LIB)
 	
 $(CORO_LIB): $(BASEKIT_LIB)
 	@echo Building coroutine library
-	@cd src/coroutine && make
+	@cd src/coroutine && make -s
 
 $(BASEKIT_LIB):
 	@echo Building basekit library
-	@cd src/basekit && make
+	@cd src/basekit && make -s
 	
 clean:
 	@echo Removing make-generated files

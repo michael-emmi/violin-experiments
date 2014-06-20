@@ -48,7 +48,7 @@ DLL_L := $(addsuffix /_build/dll,$(DLL_L))
 DLL_l := $(dependson)
 DLL_l := $(addprefix -l,$(DLL_l))
 
-CFLAGS = $(OPTIMIZE) $(WARN) $(HEADERS) #--param max-inline-insns-single=500
+CFLAGS = -w $(OPTIMIZE) $(WARN) $(HEADERS) #--param max-inline-insns-single=500
 
 # Uncommment for Coros to register their stack with Valgrind
 #CFLAGS += -DUSE_VALGRIND
