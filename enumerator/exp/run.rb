@@ -89,6 +89,7 @@ def generate_data(data_file, data_patterns = default_data_patterns, opts)
   opts[:repeat] ||= 1
   File.open(File.join(data_dir,data_file), "w") do |file|
     file.puts titles(extract(nil,data_patterns))
+    file.flush
     opts[:repeat].times do
       opts[:delays].each do |d|
         puts "* generating data for #{opts[:object]} w/ #{d} delays..."
@@ -102,6 +103,7 @@ def generate_data(data_file, data_patterns = default_data_patterns, opts)
                 )
                 file.puts(row(extract(output,data_patterns)))
                 file.flush
+                yield if block_given?
               end
             end
           end
@@ -127,6 +129,10 @@ def gnuplot(commands)
   IO.popen("gnuplot -p", "w") do |io|
     io.puts commands
   end
+end
+
+def get_columns(data)
+  data.first.keys.map.with_index{|k,i| [k,i+1]}.to_h
 end
 
 def wrap(data)
@@ -258,6 +264,22 @@ def plot_runtimes_per_execution(file, opts = {})
   xxx
 end
 
+# [:bkq, :dq, :msq, :rdq, :ts, :ukq].each do |obj|
+#   puts "Generating runtime data for #{obj}..."
+#   generate_runtime_data(
+#     object: obj, modes: ["none","counting-no-verify","count","lin"],
+#     adds: 1..4, removes: 1..4, delays: 0..5, barriers: 2..2)
+# end
+
+# [:bkq, :dq, :msq, :rdq, :ts, :ukq].each do |obj|
+#   # puts "Generating runtime data for #{obj}..."
+#   # generate_runtime_data(
+#   #   object: obj, modes: ["none","counting-no-verify","count","lin"],
+#   #   adds: 1..4, removes: 1..4, delays: 0..5, barriers: 2..2)
+#   plot_runtimes("runtime.#{obj}.pdf", object: obj)
+#   plot_runtimes_per_execution("runtime-per-exec.#{obj}.pdf", object: obj)
+# end
+
 ################################################################################
 ####    COVERAGE     TESTS:    K    BARRIERS     VS.     LINEARIZATION      ####
 ################################################################################
@@ -279,7 +301,7 @@ def generate_coverage_data(opts)
   generate_data "coverage.#{obj}.dat", coverage_data_patterns, opts
 end
 
-def plot_history_coverage(opts = {})
+def plot_history_coverage_boring(opts = {})
   obj = opts[:object]
   adds = opts[:adds]
   removes = opts[:removes]
@@ -326,6 +348,66 @@ def plot_history_coverage(opts = {})
   end
 end
 
+def plot_history_coverage(opts = {})
+  obj = opts[:object]
+  plot("coverage.#{obj}.dat", "coverage.#{obj}.pdf") do |data,graph|
+    data.select! {|d| d[:barriers] == 2}
+    data.select! {|d| d[:bad_histories] > 2}
+    data.select! {|d| d[:adds] + d[:removes] > 6}
+    data.sort_by! {|d| d[:bad_histories]}
+    data.each do |d|
+      d[:uncovered] = d[:bad_histories] - d[:covered]
+      d[:extra] = d[:covered] - d[:c_histories]
+      d[:pcc] = 100 * d[:covered] / d[:bad_histories]
+      d[:epo] = d[:executions] / (d[:adds] + d[:removes])
+    end
+    col = get_columns(data)
+    <<-xxx
+    set terminal pdf
+    set output '#{graph}'
+    set title '#{object_name(obj)}'
+    set xlabel "Num Executions / Num Operations"
+    set ylabel "Percent of Violations Covered"
+    set key top left
+    set style data lines
+    set style fill solid border rgb "black"
+    # set style data histogram
+    # set style histogram rows
+    # set style fill solid 0.5 border rgb "black"
+    set logscale y
+    set tic scale 0
+    # set xtics 0,30000,10000
+    plot \
+      #{wrap(data)} using #{col[:c_histories]} title "Detected", \
+      #{wrap(data)} using #{col[:covered]} title "Covered", \
+      #{wrap(data)} using #{col[:bad_histories]} title "All Violations"
+    xxx
+  end
+end
+
+# [:bkq, :dq, :msq, :rdq, :ts, :ukq].each do |obj|
+#   puts "Generating coverage data for #{obj}..."
+#   generate_coverage_data(
+#     object: obj, mode: "versus",
+#     adds: 1..4, removes: 1..4, delays: 0..5, barriers: 0..4)
+# end
+
+# [:bkq, :dq, :msq, :rdq, :ts, :ukq].each do |obj|
+#   puts "Generating coverage data for #{obj}..."
+#   generate_coverage_data(
+#     object: obj, modes: ["versus"],
+#     adds: 1..4, removes: 1..4, delays: 0..5, barriers: 0..4)
+#   # plot_history_coverage(object: obj, adds: _, removes: _)
+# end
+
+# (2..4).each do |a|
+#   (2..4).each do |r|
+#     plot_history_coverage(object: :bkq, adds: a, removes: r)
+#   end
+# end
+
+plot_history_coverage(object: :bkq)
+
 ################################################################################
 ####  STRESS TESTS  : LINEARIZATION  VS. INCREASING  NUMBER OF  OPERATIONS  ####
 ################################################################################
@@ -343,10 +425,6 @@ end
 def generate_stress_data(opts)
   obj = opts[:object]
   generate_data "stress.#{obj}.dat", stress_data_patterns, opts
-end
-
-def get_columns(data)
-  data.first.keys.map.with_index{|k,i| [k,i+1]}.to_h
 end
 
 def plot_stress_data(opts = {})
@@ -396,25 +474,6 @@ def plot_stress_data(opts = {})
   end
 end
 
-################################################################################
-####                             N'IMPORTE QUOI                             ####
-################################################################################
-
-
-# [:bkq, :dq, :msq, :rdq, :ts, :ukq].each do |obj|
-#   puts "Generating runtime data for #{obj}..."
-#   generate_runtime_data(
-#     object: obj, modes: ["none","counting-no-verify","count","lin"],
-#     adds: 1..4, removes: 1..4, delays: 0..5, barriers: 2..2)
-# end
-
-# [:bkq, :dq, :msq, :rdq, :ts, :ukq].each do |obj|
-#   puts "Generating coverage data for #{obj}..."
-#   generate_coverage_data(
-#     object: obj, mode: "versus",
-#     adds: 1..4, removes: 1..4, delays: 0..5, barriers: 0..4)
-# end
-
 # [:msq].each do |obj|
 #   puts "Generating stress data for #{obj}"
 #   generate_stress_data(
@@ -427,29 +486,44 @@ end
 #   adds: 1..10, removes: 1..10, delays: 3..3, barriers: 2..2,
 #   repeat: 3)
 
-plot_stress_data(object: :msq)
+# plot_stress_data(object: :msq)
 
-# [:bkq, :dq, :msq, :rdq, :ts, :ukq].each do |obj|
-#   # puts "Generating runtime data for #{obj}..."
-#   # generate_runtime_data(
-#   #   object: obj, modes: ["none","counting-no-verify","count","lin"],
-#   #   adds: 1..4, removes: 1..4, delays: 0..5, barriers: 2..2)
-#   plot_runtimes("runtime.#{obj}.pdf", object: obj)
-#   plot_runtimes_per_execution("runtime-per-exec.#{obj}.pdf", object: obj)
-# end
+################################################################################
+####       BARRIER    TESTS:     COST    OF    INCREASiNG     BARRIERS      ####
+################################################################################
 
-# [:bkq, :dq, :msq, :rdq, :ts, :ukq].each do |obj|
-#   puts "Generating coverage data for #{obj}..."
-#   generate_coverage_data(
-#     object: obj, modes: ["versus"],
-#     adds: 1..4, removes: 1..4, delays: 0..5, barriers: 0..4)
-#   # plot_history_coverage(object: obj, adds: _, removes: _)
-# end
+def generate_barrier_data(opts,&block)
+  obj = opts[:object]
+  generate_data "barrier.#{obj}.dat", default_data_patterns, opts, &block
+end
 
+def plot_barrier_data(opts = {})
+  obj = opts[:object]
+  adds = opts[:adds]
+  removes = opts[:removes]
 
-# (2..4).each do |a|
-#   (2..4).each do |r|
-#     plot_history_coverage(object: :bkq, adds: a, removes: r)
-#   end
+  plot("barrier.#{obj}.dat", "barrier.#{obj}.pdf") do |data,graph|
+    col = get_columns(data)
+    <<-xxx
+    set terminal pdf
+    set output '#{graph}'
+    set title '#{object_name(obj)}'
+    set xlabel "XXX"
+    set ylabel "Execution Time"
+    set key top left
+    set style data lines
+    # set style fill solid 0.5 border rgb "black"
+    set tic scale 0
+    plot \
+      #{wrap(data)} using #{col[:time]} title "XXX"
+    xxx
+  end
+end
+
+# generate_barrier_data(
+#   object: :msq, modes: ['counting'],
+#   adds: 5..5, removes: 5..5, delays: 4..4, barriers: 0..20) do
+#
+#   plot_barrier_data(object: :msq)
 # end
 
