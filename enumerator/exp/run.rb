@@ -334,7 +334,7 @@ def plot_stress_data(opts = {})
     set logscale y
     set style fill solid border rgb "black"
     set boxwidth 0.8
-    set xlabel "No. Operations (1x1 -- 10x10)"
+    set xlabel "No. Operations (1+1 -- 10+10)"
     set ylabel "Execution Time (s) -- timeout 5m"
     # set auto x
     # set auto y
