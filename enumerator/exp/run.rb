@@ -205,6 +205,59 @@ def plot_runtimes(opts = {})
   end
 end
 
+def plot_runtimes_per_execution(file, opts = {})
+  graph_file = File.join graphs_dir, file
+  data = read_data(runtime_data_file(opts[:object]))
+  data.select!{|d| d[:delays] > 1 && d[:adds] > 1 && d[:removes] > 1}
+  data.sort! do |a,b|
+    next -1 if a[:delays] < b[:delays]
+    next 1 if a[:delays] > b[:delays]
+    next -1 if a[:adds] < b[:adds]
+    next 1 if a[:adds] > b[:adds]
+    next -1 if a[:removes] < b[:removes]
+    next 1 if a[:removes] > b[:removes]
+    next 0
+  end
+  data.each do |d|
+    d[:time] = d[:time] / d[:executions] if d[:executions].is_a?(Integer)
+  end
+  # data = data.sort_by{|d| d[:delays]}
+  # data.select!{|d| d[:adds] == opts[:adds] && d[:removes] == opts[:removes]}
+  raw_data = data.select{|d| d[:mode] =~ /Unmonitored/}
+  cnov_data = data.select{|d| d[:mode] =~ /NoVerify/}
+  cnt_data = data.select{|d| d[:mode] =~ /Counting/}
+  lin_data = data.select{|d| d[:mode] =~ /Linearization/}
+  gnuplot <<-xxx
+  set terminal pdf
+  set output '#{graph_file}'
+  set title '#{object_names[opts[:object]]}'
+  set key box opaque top left
+  set style data lines
+  # set style data histogram
+  # set style histogram rows
+  # set style histogram clustered gap 0
+  set style fill transparent solid 0.5 border rgb "black"
+  # set style fill solid border rgb "black"
+  set boxwidth 0.8
+  set xlabel "Increasing delays & operations"
+  set ylabel "Execution Time"
+  set logscale y
+  set xtics 4,9,36
+  set xtics add ("2 delays" 4)
+  set xtics add ("3 delays" 13)
+  set xtics add ("4 delays" 22)
+  set xtics add ("5 delays" 31)
+  # set yrange [0.01:*]
+  set grid y
+  set tic scale 0
+  plot \
+    #{wrap(lin_data)} using 6 title "Linearization" #{color(3)} w filledcurve x1, \
+    #{wrap(cnt_data)} using 6 title "Counting (w/ verify)" #{color(2)} w filledcurve x1, \
+    #{wrap(cnov_data)} using 6 title "Counting (w/o verify)" #{color(1)} w filledcurve x1, \
+    #{wrap(raw_data)} using 6 title "No monitoring" #{color(0)} w filledcurve x1
+  xxx
+end
+
 ################################################################################
 ####    COVERAGE     TESTS:    K    BARRIERS     VS.     LINEARIZATION      ####
 ################################################################################
@@ -382,6 +435,23 @@ end
 #   repeat: 3)
 
 plot_stress_data(object: :msq)
+
+# [:bkq, :dq, :msq, :rdq, :ts, :ukq].each do |obj|
+#   # puts "Generating runtime data for #{obj}..."
+#   # generate_runtime_data(
+#   #   object: obj, modes: ["none","counting-no-verify","count","lin"],
+#   #   adds: 1..4, removes: 1..4, delays: 0..5, barriers: 2..2)
+#   plot_runtimes("runtime.#{obj}.pdf", object: obj)
+#   plot_runtimes_per_execution("runtime-per-exec.#{obj}.pdf", object: obj)
+# end
+
+# [:bkq, :dq, :msq, :rdq, :ts, :ukq].each do |obj|
+#   puts "Generating coverage data for #{obj}..."
+#   generate_coverage_data(
+#     object: obj, modes: ["versus"],
+#     adds: 1..4, removes: 1..4, delays: 0..5, barriers: 0..4)
+#   # plot_history_coverage(object: obj, adds: _, removes: _)
+# end
 
 
 # (2..4).each do |a|
