@@ -363,42 +363,35 @@ def plot_stress_data(opts = {})
       b = a+r+1
       m + (a+r).to_s(b) + (a).to_s(b) + (r).to_s(b)
     end
-    data = data.chunk do |d|
-      [d[:adds],d[:removes]]
-    end.map do |_,ds|
-      ds.first[:time] = ds.map{|d|d[:time]}.reduce(:+) / ds.count \
-        if ds.all? {|d| d[:time].is_a?(Integer)}
-      ds.first
-    end
+    # data.each do |d|
+    #   d[:time] /= d[:executions].to_f if d[:time].is_a?(Numeric)
+    # end
     ldata = data.select{|d| d[:mode] =~ /Lin/}
     cdata = data.select{|d| d[:mode] =~ /Counting/}
     ndata = data.select{|d| d[:mode] =~ /Unmonitored/}
-    ndata.each do |d|
-      d[:executions] /= 100000.0 if d[:executions].is_a?(Integer)
+    ldata.each.with_index do |d,i|
+      d[:time] /= ndata[i][:time].to_f
+    end
+    cdata.each.with_index do |d,i|
+      d[:time] /= ndata[i][:time].to_f
     end
     <<-xxx
     set terminal pdf
     set output '#{graph}'
     set title '#{object_name(obj)}'
-    # set key invert
-    set key box opaque top left
-    set style data lines
-    set style fill transparent solid 0.5 border rgb "black"
-    set logscale y
-    set style fill solid border rgb "black"
-    set boxwidth 0.8
     set xlabel "No. Operations (1+1 -- 10+10)"
-    set ylabel "Execution Time (s) -- timeout 5m"
-    # set auto x
-    # set auto y
-    set yrange [0.01:*]
+    set ylabel "Execution Time \\n (normalized over time without monitor)"
+    set key top left
+    set style data lines
+    set style fill solid 0.5 border rgb "black"
+    set logscale y
     set grid y
     set tic scale 0
+    set xtics 5,100,100
+    set for [i=1:10] xtics add ("".(2*i)."" (10*(i-1)+5))
     plot \
       #{wrap(ldata)} using #{col[:time]} title "Linearization" #{color(3)} w filledcurve x1, \
-      #{wrap(cdata)} using #{col[:time]} title "Counting" #{color(2)} w filledcurve x1, \
-      #{wrap(ndata)} using #{col[:time]} title "No Monitor" #{color(0)} w filledcurve x1, \
-      #{wrap(ndata)} using #{col[:executions]} title "100K Executions" #{color(1)} w filledcurve x1
+      #{wrap(cdata)} using #{col[:time]} title "Counting" #{color(2)} w filledcurve x1
     xxx
   end
 end
