@@ -312,11 +312,12 @@ protected:
   string name;
   string vstring;
   int violationCount;
-  const bool collect_bad_histories;
+  const bool do_collect_histories;
+  unordered_set<History*> all_histories;
   unordered_set<History*> bad_histories;
 public:
   Monitor(string n, bool collect)
-    : name(n), violationCount(0), collect_bad_histories(collect) { }
+    : name(n), violationCount(0), do_collect_histories(collect) { }
   string getName() { return name; }
   string violation() { return vstring; }
   int numViolations() { return violationCount; }
@@ -324,7 +325,14 @@ public:
   virtual void onPreExecute() { vstring = ""; };
   virtual void onCall(Operation *op) {}
   virtual void onReturn(Operation *op) {}
+  unordered_set<History*> &getAllHistories() { return all_histories; }
   unordered_set<History*> &getBadHistories() { return bad_histories; }
+protected:
+  void logHistory(History *h, bool is_bad = false) {
+    if (!do_collect_histories) return;
+    if (is_bad) bad_histories.insert(h);
+    all_histories.insert(h);
+  }
 };
 
 struct Object {
@@ -511,12 +519,13 @@ int violin(
   cout << num_executions << " schedules enumerated in " << diff << "s." << endl;
 
   for (int i=0; i<v.monitors.size(); i++) {
-    cout << v.monitors[i]->getName() << " found "
+    cout << v.monitors[i]->getName() << " saw "
          << v.monitors[i]->numViolations() << " violations";
-
+    
     if (mode == VERSUS_MODE) {
       unordered_set<History*> &bads = v.monitors[i]->getBadHistories();
-      cout << " / " << bads.size() << " histories";
+      unordered_set<History*> &all = v.monitors[i]->getAllHistories();
+      cout << " in " << bads.size() << "/" << all.size() << " histories";
       if (i+1 < v.monitors.size()) {
         Monitor *nextM = v.monitors[i+1];
         int numCovered = 0;

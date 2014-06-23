@@ -288,11 +288,12 @@ def coverage_data_patterns
   lu = "Line-Up"
   oc = "Operation-Counting"
   default_data_patterns.merge({
-    bad_executions: /#{lu} found (\d+) violations/,
-    bad_histories: /#{lu} found \d+ violations \/ (\d+) histories/,
+    bad_executions: /#{lu} saw (\d+) violations/,
+    bad_histories: /#{lu} saw \d+ violations in (\d+)\/\d+ histories/,
+    all_histories: /#{lu} saw \d+ violations in \d+\/(\d+) histories/,
     covered: /histories; #{oc} covers (\d+)\./,
-    c_executions: /#{oc} found (\d+) violations/,
-    c_histories: /#{oc} found \d+ violations \/ (\d+) histories/,
+    c_executions: /#{oc} saw (\d+) violations/,
+    c_histories: /#{oc} saw \d+ violations \/ (\d+) histories/,
   })
 end
 
@@ -353,34 +354,35 @@ def plot_history_coverage(opts = {})
   plot("coverage.#{obj}.dat", "coverage.#{obj}.pdf") do |data,graph|
     data.select! {|d| d[:barriers] == 2}
     data.select! {|d| d[:bad_histories] > 2}
-    data.select! {|d| d[:adds] + d[:removes] > 6}
-    data.sort_by! {|d| d[:bad_histories]}
+    data.select! {|d| d[:adds] + d[:removes] > 4}
     data.each do |d|
       d[:uncovered] = d[:bad_histories] - d[:covered]
       d[:extra] = d[:covered] - d[:c_histories]
       d[:pcc] = 100 * d[:covered] / d[:bad_histories]
-      d[:epo] = d[:executions] / (d[:adds] + d[:removes])
+      d[:apr] = ((d[:adds] + d[:removes])) ** 6
+      d[:hpo] = 1000 * d[:bad_histories] / d[:apr]
     end
+    data.sort_by! {|d| d[:hpo]}
     col = get_columns(data)
     <<-xxx
     set terminal pdf
     set output '#{graph}'
-    set title '#{object_name(obj)}'
-    set xlabel "Num Executions / Num Operations"
-    set ylabel "Percent of Violations Covered"
+    set title '#{object_name(obj)} with 2 Barriers'
+    set xlabel "Number of Histories / (Number of Operations)^6"
+    set ylabel "Number of Violations"
     set key top left
     set style data lines
-    set style fill solid border rgb "black"
+    # set style fill solid border rgb "black"
     # set style data histogram
     # set style histogram rows
-    # set style fill solid 0.5 border rgb "black"
+    set style fill solid 0.5 border rgb "black"
     set logscale y
     set tic scale 0
-    # set xtics 0,30000,10000
+    set xtics 45,45,45
     plot \
-      #{wrap(data)} using #{col[:c_histories]} title "Detected", \
-      #{wrap(data)} using #{col[:covered]} title "Covered", \
-      #{wrap(data)} using #{col[:bad_histories]} title "All Violations"
+      #{wrap(data)} using #{col[:bad_histories]} title "All Violations" w filledcurve x1, \
+      #{wrap(data)} using #{col[:covered]} title "Covered" w filledcurve x1, \
+      #{wrap(data)} using #{col[:c_histories]} title "Detected" w filledcurve x1
     xxx
   end
 end

@@ -117,6 +117,7 @@ private:
   }
 
   void check_violations() {
+    bool is_violation = false;
     queue< pair< list<Operation*>, list<Operation*> > > work_list;
     list<Operation*> empty_seq;
     list<Operation*> ops;
@@ -141,10 +142,7 @@ private:
         if (valid_linear_histories.find(linearization_to_string(sequence))
             != valid_linear_histories.end()) {
           // cout << ":-) " << linearization_to_string(sequence) << endl;
-          total_num_linearizations += num_linearizations;
-          if (num_linearizations > max_num_linearizations)
-            max_num_linearizations = num_linearizations;
-          return;
+          goto DONE;
         } else {
           // cout << ":-X " << linearization_to_string(sequence) << endl;
           if (debug)
@@ -183,10 +181,10 @@ private:
   
     vstring = "(Lv)";
     violationCount++;
-    if (collect_bad_histories) {
-      bad_histories.insert(new History(operations));
-    }
+    is_violation = true;
 
+  DONE:
+    logHistory(new History(operations),is_violation);
     total_num_linearizations += num_linearizations;
     if (num_linearizations > max_num_linearizations)
       max_num_linearizations = num_linearizations;

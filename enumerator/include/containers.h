@@ -173,6 +173,7 @@ private:
 
   void check_violations() {
     stringstream s;
+    bool is_violation = false;
 
     if (check_remove_violations || check_order_violations) {
       for (int v = 1; v <= num_values; v++) {
@@ -201,13 +202,15 @@ private:
       goto FOUND;
     }
 
-    return;
+    goto NOT_FOUND;
 
   FOUND:
     vstring = s.str();
     violationCount++;
-    if (collect_bad_histories)
-      bad_histories.insert(historyOfCounters());
+    is_violation = true;
+
+  NOT_FOUND:
+    logHistory(historyOfCounters(), is_violation);
     return;
   }
 
