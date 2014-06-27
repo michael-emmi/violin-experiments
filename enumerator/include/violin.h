@@ -473,7 +473,7 @@ int violin(
   cout << "Violin: A Linearization-Violation Detector." << endl;;
 
   switch (mode) {
-    case VERSUS_MODE: cout << "Linearization vs. counting"; break;
+    case VERSUS_MODE: cout << "Lin-vs-counting"; break;
     case COUNTING_NO_VERIFY_MODE: cout << "Counting-no-verify"; break;
     case COUNTING_MODE: cout << "Counting"; break;
     case LINEARIZATIONS_MODE: cout << "Linearization"; break;
@@ -498,11 +498,19 @@ int violin(
       new LinearizationMonitor(spec_obj, v.operations, spec_ops, mode==VERSUS_MODE, mode==LIN_SKIP_ATOMIC_MODE));
   }
 
-  if (mode == COUNTING_MODE || mode == COUNTING_NO_VERIFY_MODE || mode == VERSUS_MODE)
+  if (mode == COUNTING_MODE || mode == COUNTING_NO_VERIFY_MODE)
     v.monitors.push_back(
       new CollectionCountingMonitor(
         num_barriers+1, num_adds,
-        container_order, mode!=COUNTING_NO_VERIFY_MODE, mode==VERSUS_MODE));
+        container_order, mode!=COUNTING_NO_VERIFY_MODE, false));
+
+  if (mode == VERSUS_MODE) {
+    for (int b=0; b<=num_barriers; b++) {
+      v.monitors.push_back(
+        new CollectionCountingMonitor(b+1, num_adds, container_order, true, true)
+      );
+    }
+  }
 
   timeval start_time, end_time;
   gettimeofday(&start_time,0);
@@ -526,19 +534,19 @@ int violin(
       unordered_set<History*> &bads = v.monitors[i]->getBadHistories();
       unordered_set<History*> &all = v.monitors[i]->getAllHistories();
       cout << " in " << bads.size() << "/" << all.size() << " histories";
-      if (i+1 < v.monitors.size()) {
-        Monitor *nextM = v.monitors[i+1];
+      if (i > 0) {
+        Monitor *lm = v.monitors[0];
         int numCovered = 0;
-        unordered_set<History*> &nextBads = nextM->getBadHistories();
-        for (unordered_set<History*>::iterator h = bads.begin(); h != bads.end(); ++h) {
-          for (unordered_set<History*>::iterator w = nextBads.begin(); w != nextBads.end(); ++w) {
+        unordered_set<History*> &linBads = lm->getBadHistories();
+        for (unordered_set<History*>::iterator h = linBads.begin(); h != linBads.end(); ++h) {
+          for (unordered_set<History*>::iterator w = bads.begin(); w != bads.end(); ++w) {
             if (**w <= **h) {
               numCovered++;
               break;
             }
           }
         }
-        cout << "; " << nextM->getName() << " covers " << numCovered;
+        cout << "; covered " << numCovered;
       }
     }
     cout << "." << endl;

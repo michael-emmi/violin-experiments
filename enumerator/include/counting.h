@@ -14,7 +14,11 @@ protected:
 public:
   CountingMonitor(int N, int M, bool collect)
     : Monitor("Operation-Counting", collect),
-      interval_bound(N), num_methods(M), counters(new int[N*(N+1)*M]) { }
+      interval_bound(N), num_methods(M), counters(new int[N*(N+1)*M]) {
+    stringstream s;
+    s << "Operation-Counting(" << N-1 << ")";
+    name = s.str();
+  }
 
   virtual void onPreExecute() {
     Monitor::onPreExecute();

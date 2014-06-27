@@ -20,8 +20,13 @@ public:
       check_order_violations(verify),
       check_remove_violations(verify)
     { }
+  void onReturn() {
+    if (vstring == "")
+      check_violations();
+  }
   void onPostExecute() {
-    check_violations();
+    if (vstring == "")
+      check_violations();
     CountingMonitor::onPostExecute();
   }
 
