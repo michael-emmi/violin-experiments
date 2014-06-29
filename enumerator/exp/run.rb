@@ -304,9 +304,9 @@ def coverage_data_patterns(n)
   end
 end
 
-def generate_coverage_data(opts)
+def generate_coverage_data(opts, &block)
   obj = opts[:object]
-  generate_data "coverage.#{obj}.dat", coverage_data_patterns(opts[:barriers].last), opts
+  generate_data "coverage.#{obj}.dat", coverage_data_patterns(opts[:barriers].last), opts, &block
   end
 
 def plot_history_coverage_boring(opts = {})
@@ -380,6 +380,7 @@ def plot_history_coverage(opts = {})
     plot \
       #{wrap(data)} using #{col[:all_histories]} title "All Histoires" w filledcurve x1, \
       #{wrap(data)} using #{col[:bad_histories]} title "All Violations" w filledcurve x1, \
+      #{wrap(data)} using #{col[:c4_covered]} title "Covered 4" w filledcurve x1, \
       #{wrap(data)} using #{col[:c3_covered]} title "Covered 3" w filledcurve x1, \
       #{wrap(data)} using #{col[:c2_covered]} title "Covered 2" w filledcurve x1, \
       #{wrap(data)} using #{col[:c1_covered]} title "Covered 1" w filledcurve x1, \
@@ -396,13 +397,14 @@ end
 # end
 
 # [:bkq, :dq, :msq, :rdq, :ts, :ukq].each do |obj|
-# [:bkq].each do |obj|
-#   puts "Generating coverage data for #{obj}..."
-#   generate_coverage_data(
-#     object: obj, modes: ["versus"],
-#     adds: 1..4, removes: 1..4, delays: 0..5, barriers: 4..4)
-#   # plot_history_coverage(object: obj, adds: _, removes: _)
-# end
+[:bkq].each do |obj|
+  puts "Generating coverage data for #{obj}..."
+  generate_coverage_data(
+    object: obj, modes: ["versus"],
+    adds: 1..4, removes: 1..4, delays: 0..5, barriers: 4..4) do
+    plot_history_coverage(object: obj)
+  end
+end
 
 # (2..4).each do |a|
 #   (2..4).each do |r|
@@ -411,9 +413,9 @@ end
 # end
 
 # [:bkq,:dq,:msq,:rdq].each do |obj|
-[:bkq].each do |obj|
-  plot_history_coverage(object: obj)
-end
+# [:bkq].each do |obj|
+#   plot_history_coverage(object: obj)
+# end
 
 
 ################################################################################
