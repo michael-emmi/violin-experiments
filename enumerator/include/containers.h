@@ -215,7 +215,8 @@ private:
     is_violation = true;
 
   NOT_FOUND:
-    logHistory(historyOfCounters(), is_violation);
+    if (is_violation) // XXX needed to avoid memory exhaustion
+      logHistory(historyOfCounters(), is_violation);
     return;
   }
 

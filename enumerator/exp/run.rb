@@ -12,20 +12,21 @@ def scal_exe
   File.join File.dirname(__FILE__), "../src/scal/scal"
 end
 
-def timeout(t)
+def timeout_cmd(t)
   "gtimeout #{t}"
 end
 
-def run_scal(object, options = {})
+def run_scal(object, timeout: nil, mode: "counting", show: "none",
+    adds: 1, removes: 1, delays: 0, barriers: 0)
   cmd = ""
-  cmd << "#{timeout(options[:timeout])}" if options[:timeout]
-  cmd << " #{scal_exe} #{object}"
-  cmd << " -mode #{options[:mode]}" if options[:mode]
-  cmd << " -show #{options[:show]}" if options[:show]
-  cmd << " -adds #{options[:adds]}" if options[:adds]
-  cmd << " -removes #{options[:removes]}" if options[:removes]
-  cmd << " -delays #{options[:delays]}" if options[:delays]
-  cmd << " -barriers #{options[:barriers]}" if options[:barriers]
+  cmd << "#{timeout_cmd(timeout)} " if timeout
+  cmd << "#{scal_exe} #{object}"
+  cmd << " -mode #{mode}"
+  cmd << " -show #{show}"
+  cmd << " -adds #{adds}"
+  cmd << " -removes #{removes}"
+  cmd << " -delays #{delays}"
+  cmd << " -barriers #{barriers}"
   `#{cmd}`
 end
 
@@ -88,7 +89,7 @@ def generate_data(data_file, data_patterns = default_data_patterns, opts)
   opts[:modes] ||= ["none"]
   opts[:repeat] ||= 1
 
-  File.open(File.join(data_dir,data_file), "w") do |file|
+  File.open(File.join(data_dir,data_file), "a") do |file|
     file.puts titles(extract(nil,data_patterns))
     file.flush
     opts[:repeat].times do
@@ -99,7 +100,7 @@ def generate_data(data_file, data_patterns = default_data_patterns, opts)
             opts[:barriers].each do |b|
               opts[:modes].each do |m|
                 output = run_scal(
-                  opts[:object], mode: m, show: "none",
+                  opts[:object], mode: m,
                   adds: a, removes: r, delays: d, barriers: b
                 )
                 file.puts(row(extract(output,data_patterns)))
@@ -366,25 +367,25 @@ def plot_history_coverage(opts = {})
     data.sort_by! {|d| d[:executions].to_f / (d[:adds] + d[:removes])}
     col = get_columns(data)
     <<-xxx
-    set terminal pdf
+    set terminal pdf size 4, 2.5
     set output '#{graph}'
     set key top left
     set style data lines
+    set style fill solid 0.5 border rgb "black"
     # set style fill solid border rgb "black"
     # set style data histogram
     # set style histogram rows
-    set style fill solid 0.5 border rgb "black"
     set logscale y
     set tic scale 0
     unset xtics
     plot \
-      #{wrap(data)} using #{col[:all_histories]} title "All Histoires" w filledcurve x1, \
-      #{wrap(data)} using #{col[:bad_histories]} title "All Violations" w filledcurve x1, \
-      #{wrap(data)} using #{col[:c4_covered]} title "Covered 4" w filledcurve x1, \
-      #{wrap(data)} using #{col[:c3_covered]} title "Covered 3" w filledcurve x1, \
-      #{wrap(data)} using #{col[:c2_covered]} title "Covered 2" w filledcurve x1, \
-      #{wrap(data)} using #{col[:c1_covered]} title "Covered 1" w filledcurve x1, \
-      #{wrap(data)} using #{col[:c0_covered]} title "Covered 0" w filledcurve x1
+      #{wrap(data)} using #{col[:all_histories]} title "Histoires" w filledcurve x1, \
+      #{wrap(data)} using #{col[:bad_histories]} title "Violations" w filledcurve x1, \
+      #{wrap(data)} using #{col[:c4_covered]} title "Covered w/ k=4" w filledcurve x1, \
+      #{wrap(data)} using #{col[:c3_covered]} title "Covered w/ k=3" w filledcurve x1, \
+      #{wrap(data)} using #{col[:c2_covered]} title "Covered w/ k=2" w filledcurve x1, \
+      #{wrap(data)} using #{col[:c1_covered]} title "Covered w/ k=1" w filledcurve x1, \
+      #{wrap(data)} using #{col[:c0_covered]} title "Covered w/ k=0" w filledcurve x1
     xxx
   end
 end
@@ -397,14 +398,15 @@ end
 # end
 
 # [:bkq, :dq, :msq, :rdq, :ts, :ukq].each do |obj|
-[:bkq].each do |obj|
-  puts "Generating coverage data for #{obj}..."
-  generate_coverage_data(
-    object: obj, modes: ["versus"],
-    adds: 1..4, removes: 1..4, delays: 0..5, barriers: 4..4) do
-    plot_history_coverage(object: obj)
-  end
-end
+# [:bkq].each do |obj|
+#   puts "Generating coverage data for #{obj}..."
+#   generate_coverage_data(
+#     object: obj, modes: ["versus"],
+#     # adds: 1..4, removes: 1..4, delays: 0..5, barriers: 4..4) do
+#     adds: 4..4, removes: 4..4, delays: 5..5, barriers: 4..4) do
+#     plot_history_coverage(object: obj)
+#   end
+# end
 
 # (2..4).each do |a|
 #   (2..4).each do |r|
@@ -416,6 +418,8 @@ end
 # [:bkq].each do |obj|
 #   plot_history_coverage(object: obj)
 # end
+
+plot_history_coverage(object: :bkq)
 
 
 ################################################################################
