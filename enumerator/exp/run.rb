@@ -137,9 +137,9 @@ def get_columns(data)
   data.first.keys.map.with_index{|k,i| [k,i+1]}.to_h
 end
 
-def wrap(data)
+def wrap(data, separator = ' ')
   "\"< echo '#{data.select{|d| if block_given? then yield d else true end}.
-  map(&:values).map{|d| d.join(' ')}.join("\\n")}'\""
+  map(&:values).map{|d| d.join(separator)}.join("\\n")}'\""
 end
 
 def color(c)
@@ -364,28 +364,40 @@ def plot_history_coverage(opts = {})
     data.select! {|d| d[:executions] > 1000}
     # data.select! {|d| d[:adds] + d[:removes] > 2}
     return unless data.size > 0
+    data.each {|d| d[:eo] = "\'#{d[:executions]} / #{d[:adds] + d[:removes]}\'"}
     data.sort_by! {|d| d[:executions].to_f / (d[:adds] + d[:removes])}
     col = get_columns(data)
     <<-xxx
     set terminal pdf size 4, 2.5
     set output '#{graph}'
+    set datafile missing "-"
     set key top left
-    set style data lines
-    set style fill solid 0.5 border rgb "black"
+    # set style data lines
+    set datafile separator ","
+    set style data filledcurves y1=0
+    set style fill solid border rgb "black"
     # set style fill solid border rgb "black"
     # set style data histogram
     # set style histogram rows
     set logscale y
+    set style line 1 lt rgb "#FFFFFF" lw 2
+    set style line 2 lt rgb "#000000" lw 2
+    set style line 3 lt rgb "#555555" lw 2
+    set style line 4 lt rgb "#999999" lw 2
+    set style line 5 lt rgb "#CCCCCC" lw 2
+    set style line 6 lt rgb "#DDDDDD" lw 2
+    set style line 7 lt rgb "#EEEEEE" lw 2
     set tic scale 0
     unset xtics
+    # set xtics nomirror rotate by 45 right font ",4"
     plot \
-      #{wrap(data)} using #{col[:all_histories]} title "Histoires" w filledcurve x1, \
-      #{wrap(data)} using #{col[:bad_histories]} title "Violations" w filledcurve x1, \
-      #{wrap(data)} using #{col[:c4_covered]} title "Covered w/ k=4" w filledcurve x1, \
-      #{wrap(data)} using #{col[:c3_covered]} title "Covered w/ k=3" w filledcurve x1, \
-      #{wrap(data)} using #{col[:c2_covered]} title "Covered w/ k=2" w filledcurve x1, \
-      #{wrap(data)} using #{col[:c1_covered]} title "Covered w/ k=1" w filledcurve x1, \
-      #{wrap(data)} using #{col[:c0_covered]} title "Covered w/ k=0" w filledcurve x1
+      #{wrap(data,',')} using #{col[:all_histories]}:xtic(#{col[:eo]}) title "Histoires" ls 1, \
+      #{wrap(data,',')} using #{col[:bad_histories]} title "Violations" ls 2, \
+      #{wrap(data,',')} using #{col[:c4_covered]} title "Covered w/ k=4" ls 3, \
+      #{wrap(data,',')} using #{col[:c3_covered]} title "Covered w/ k=3" ls 4, \
+      #{wrap(data,',')} using #{col[:c2_covered]} title "Covered w/ k=2" ls 5, \
+      #{wrap(data,',')} using #{col[:c1_covered]} title "Covered w/ k=1" ls 6, \
+      #{wrap(data,',')} using #{col[:c0_covered]} title "Covered w/ k=0" ls 7
     xxx
   end
 end
@@ -447,7 +459,6 @@ def plot_stress_data(opts = {})
   removes = opts[:removes]
 
   plot("stress.#{obj}.dat", "stress.#{obj}.pdf") do |data,graph|
-    col = get_columns(data)
     data.sort_by! do |d|
       m = d[:mode][0]
       a = d[:adds]
@@ -463,10 +474,12 @@ def plot_stress_data(opts = {})
     ndata = data.select{|d| d[:mode] =~ /Unmonitored/}
     ldata.each.with_index do |d,i|
       d[:time] /= ndata[i][:time].to_f
+      d[:xt] = "#{d[:adds]}+#{d[:removes]}"
     end
     cdata.each.with_index do |d,i|
       d[:time] /= ndata[i][:time].to_f
     end
+    col = get_columns(ldata)
     <<-xxx
     set terminal pdf size 3, 1.8
     set output '#{graph}'
@@ -474,15 +487,21 @@ def plot_stress_data(opts = {})
     # set xlabel "No. Operations (1+1 -- 10+10)"
     # set ylabel "Execution Time \\n (normalized over time without monitor)"
     set key top left
-    set style data lines
+    # set style data lines
+    set style data filledcurves y1=0
+    set style fill solid border rgb "black"
     set style fill solid 0.5 border rgb "black"
     set logscale y
+    set style line 1 lt rgb "#CCCCCC" lw 2
+    set style line 2 lt rgb "#555555" lw 2
+    set yrange [1:1000]
     set grid y
     set tic scale 0
     unset xtics
+    # set xtics nomirror rotate by 45 right font ",4"
     plot \
-      #{wrap(ldata)} using #{col[:time]} title "Linearization" #{color(3)} w filledcurve x1, \
-      #{wrap(cdata)} using #{col[:time]} title "Operation Counting" #{color(2)} w filledcurve x1
+      #{wrap(ldata)} using #{col[:time]}:xtic(#{col[:xt]}) title "Linearization" ls 1, \
+      #{wrap(cdata)} using #{col[:time]} title "Operation Counting" ls 2
     xxx
   end
 end
