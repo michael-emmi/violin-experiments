@@ -1,7 +1,9 @@
 #include <gflags/gflags.h>
 #include <sstream>
+#include <map>
+#include <iostream>
 
-#include "violin.h"
+#include "scal.h"
 
 #include "datastructures/balancer_partrr.h"
 #include "datastructures/boundedsize_kfifo.h"
@@ -25,227 +27,162 @@
 #include "datastructures/wf_queue_ppopp11.h"
 // #include "datastructures/wf_queue_ppopp12.h"
 
+const string DEFAULT_PAGE_SIZE = "1k";
+const unsigned DEFAULT_K = 10;
+const unsigned DEFAULT_NUM_SEGMENTS = 1000;
+const unsigned DEFAULT_NUM_QUEUES = 2;
+const unsigned DEFAULT_PARTITIONS = 2;
+const unsigned DEFAULT_DEQUEUE_MODE = 0; // from 0,1,2
+const unsigned DEFAULT_DEQUEUE_TIMEOUT = 0;
+const unsigned DEFAULT_NUM_OPS = 2;
+const unsigned DEFAULT_QUASI_FACTOR = 2;
+const unsigned DEFAULT_MAX_RETRIES = 2;
+const unsigned DEFAULT_DELAY = 2;
+const unsigned DEFAULT_HELPING_DELAY = 2;
+
 extern uint64_t g_num_threads;
-int k = 2;
-int num_segments = 2;
-int num_queues = 2;
-int partitions = 2;
-int dequeue_mode = 0; // from 0,1,2
-int dequeue_timeout = 0;
-int num_ops = 2;
-int quasi_factor = 2;
-int max_retries = 2;
-int delay = 2;
-int helping_delay = 2;
-
-Pool<int> *obj, *spec_obj;
-int lib_object, spec_object;
-
-enum {
-  BK_QUEUE, D_QUEUE, DTS_QUEUE, FC_QUEUE, LB_QUEUE, MS_QUEUE, K_STACK,
-  RD_QUEUE, S_LIST, TR_STACK, TS_DEQUE, TS_QUEUE, TS_STACK, UK_QUEUE,
-  WF_QUEUE_11, WF_QUEUE_12
-};
-
-struct obj_desc {
-  int id;
-  violin_order_t order;
-  string short_name;
-  string long_name;
-};
-
-obj_desc objects[] = {
-  { .id = BK_QUEUE, .order = FIFO_ORDER, .short_name = "bkq", .long_name = "Bounded-size K FIFO" },
-  { .id = D_QUEUE, .order = FIFO_ORDER, .short_name = "dq", .long_name = "Distributed Queue" },
-  { .id = DTS_QUEUE, .order = FIFO_ORDER, .short_name = "dtsq", .long_name = "DTS Queue" },
-  { .id = FC_QUEUE, .order = FIFO_ORDER, .short_name = "fcq", .long_name = "Flat-combining Queue" },
-  { .id = K_STACK, .order = LIFO_ORDER, .short_name = "ks", .long_name = "K Stack" },
-  { .id = LB_QUEUE, .order = FIFO_ORDER, .short_name = "lbq", .long_name = "Lock-based Queue" },
-  { .id = MS_QUEUE, .order = FIFO_ORDER, .short_name = "msq", .long_name = "MS Queue" },
-  { .id = RD_QUEUE, .order = FIFO_ORDER, .short_name = "rdq", .long_name = "Random-dequeue Queue" },
-  { .id = S_LIST, .order = FIFO_ORDER, .short_name = "sl", .long_name = "Single List" },
-  { .id = TR_STACK, .order = LIFO_ORDER, .short_name = "ts", .long_name = "Treiber Stack" },
-  { .id = TS_DEQUE, .order = NO_ORDER, .short_name = "tsd", .long_name = "TS Deque" },
-  { .id = TS_STACK, .order = LIFO_ORDER, .short_name = "tss", .long_name = "TS Stack" },
-  { .id = TS_QUEUE, .order = FIFO_ORDER, .short_name = "tsq", .long_name = "TS Queue" },
-  { .id = UK_QUEUE, .order = FIFO_ORDER, .short_name = "ukq", .long_name = "Unbounded-size K FIFO" },
-  { .id = WF_QUEUE_11, .order = FIFO_ORDER, .short_name = "wfq11", .long_name = "Wait-free Queue (2011)" },
-  { .id = WF_QUEUE_12, .order = FIFO_ORDER, .short_name = "wfq12", .long_name = "Wait-free Queue (2012)" },
-};
-
-Pool<int>* obj_create(int id) {
-  switch (id) {
-  case BK_QUEUE: return new BoundedSizeKFifo<int>(k, num_segments);
-  case D_QUEUE: return new DistributedQueue< int, MSQueue<int> >(num_queues,g_num_threads+1,new BalancerPartitionedRoundRobin(partitions,num_queues));
-  case DTS_QUEUE: return (Pool<int>*) new DTSQueue<int>();
-  case LB_QUEUE: return (Pool<int>*) new LockBasedQueue<int>(dequeue_mode,dequeue_timeout);
-  case MS_QUEUE: return new MSQueue<int>();
-  case FC_QUEUE: return new FlatCombiningQueue<int>(num_ops);
-  case K_STACK: return new KStack<int>(k,g_num_threads+1);
-  case RD_QUEUE: return new RandomDequeueQueue<int>(quasi_factor, max_retries);
-  case S_LIST: return new SingleList<int>();
-  case TR_STACK: return new TreiberStack<int>();
-  case TS_DEQUE: return new TSDeque<int,TSDequeBuffer<int,HardwareTimestamp>,HardwareTimestamp>(g_num_threads+1, delay);
-  case TS_QUEUE: return new TSQueue<int,TSQueueBuffer<int,HardwareTimestamp>,HardwareTimestamp>(g_num_threads+1, delay);
-  case TS_STACK: return new TSStack<int,TSStackBuffer<int,HardwareTimestamp>,HardwareTimestamp>(g_num_threads+1, delay);
-  case UK_QUEUE: return new UnboundedSizeKFifo<int>(k);
-  case WF_QUEUE_11: return new WaitfreeQueue<int>(g_num_threads+1);
-  // case WF_QUEUE_12: return new WaitfreeQueue<int>(g_num_threads+1, max_retries, helping_delay);
-  default:
-    assert(false);
-  }
-}
-
-int obj_id(string name) {
-  int len = sizeof(objects) / sizeof(obj_desc);
-  for (int i=0; i<len; i++)
-    if (objects[i].short_name == name) {
-      return objects[i].id;
-    }
-  return -1;
-}
-
-string obj_name(int id) {
-  int len = sizeof(objects) / sizeof(obj_desc);
-  for (int i=0; i<len; i++)
-    if (objects[i].id == id)
-      return objects[i].long_name;
-  return "????";
-}
-
-violin_order_t obj_order(int id) {
-  int len = sizeof(objects) / sizeof(obj_desc);
-  for (int i=0; i<len; i++)
-    if (objects[i].id == id)
-      return objects[i].order;
-  return NO_ORDER;
-}
-
-void obj_reset() {
-  if (obj) delete obj;
-  obj = obj_create(lib_object);
-}
-
-void spec_reset() {
-  if (spec_obj) delete spec_obj;
-  spec_obj = obj_create(spec_object);
-}
-
-void obj_add(int v) {
-  obj->put(v);
-}
-
-void spec_add(int v) {
-  spec_obj->put(v);
-}
-
-int obj_rem() {
-  int result;
-  if (obj->get(&result))
-    return result;
-  else
-    return -1;
-}
-
-int spec_rem() {
-  int result;
-  if (spec_obj->get(&result))
-    return result;
-  else
-    return -1;
-}
-
-DEFINE_int32(adds, 1, "how many add operations?");
-DEFINE_int32(removes, 1, "how many remove operations?");
-DEFINE_int32(barriers, 0, "how many barriers?");
-DEFINE_int32(delays, 0, "how many delays?");
-DEFINE_string(mode, "counting", "which mode? {nothing,counting,counting-no-verify,linearization,versus}");
-DEFINE_int32(alloc, 0, "allocation policy? 0=default, 1=LRF, 2=MRF");
-DEFINE_string(show, "all", "show which histories? {all,wins,violations,none}");
-
 uint64_t g_num_threads;
+unsigned k;
+unsigned num_segments;
+unsigned num_queues;
+unsigned partitions;
+unsigned dequeue_mode;
+unsigned dequeue_timeout;
+unsigned num_ops;
+unsigned quasi_factor;
+unsigned max_retries;
+unsigned delay;
+unsigned helping_delay;
 
-int main(int argc, char **argv) {
+map<string,obj_desc> objects;
 
-  stringstream usage;
-  usage << "usage" << endl;
-  usage << "  " << argv[0] << " [flags] OBJ, where OBJ comes from:" << endl;
-  int len = sizeof(objects) / sizeof(obj_desc);
-  for (int i=0; i<len; i++) {
-    usage << "    " << objects[i].short_name << " -> " << objects[i].long_name << endl;
+vector<bool> thread_initialized;
+
+void ensure_thread_initialized() {
+  uint64_t id = scal::ThreadContext::get().thread_id();
+  while (thread_initialized.size() <= id)
+    thread_initialized.push_back(false);
+  if (!thread_initialized[id]) {
+    uint64_t tlsize = scal::human_size_to_pages(
+      DEFAULT_PAGE_SIZE.c_str(),DEFAULT_PAGE_SIZE.size());
+    scal::tlalloc_init(tlsize, true /* touch pages */);
   }
-  usage << "  then see the flags below.";
+}
 
-  google::SetUsageMessage(usage.str());
-  google::ParseCommandLineFlags(&argc, &argv, true);
+#define DECLARE_OBJ(ID,NAME,SPEC) \
+  objects[ID] = { .id = ID, .name = NAME, .spec = SPEC }
 
-  if (argc-1 != 1) {
-    cerr << "Must specify one data structure; see --help for usage." << endl;
-    exit(-1);
-  }
+void scal_initialize(unsigned num_threads) {
+  DECLARE_OBJ("bkq",    "Bounded-size-K-FIFO",    "atomic-queue");
+  DECLARE_OBJ("dq",     "Distributed-Queue",      "atomic-queue");
+  DECLARE_OBJ("dtsq",   "DTS-Queue",              "atomic-queue");
+  DECLARE_OBJ("fcq",    "Flat-combining-Queue",   "atomic-queue");
+  DECLARE_OBJ("ks",     "K-Stack",                "atomic-stack");
+  DECLARE_OBJ("lbq",    "Lock-based-Queue",       "atomic-queue");
+  DECLARE_OBJ("msq",    "MS-Queue",               "atomic-queue");
+  DECLARE_OBJ("rdq",    "Random-dequeue-Queue",   "atomic-queue");
+  DECLARE_OBJ("sl",     "Single-List",            "atomic-queue");
+  DECLARE_OBJ("ts",     "Treiber-Stack",          "atomic-stack");
+  DECLARE_OBJ("tsd",    "TS-Deque",               "atomic-collection");
+  DECLARE_OBJ("tss",    "TS-Stack",               "atomic-stack");
+  DECLARE_OBJ("tsq",    "TS-Queue",               "atomic-queue");
+  DECLARE_OBJ("ukq",    "Unbounded-size-K-FIFO",  "atomic-queue");
+  DECLARE_OBJ("wfq11",  "Wait-free-Queue-2011", "atomic-queue");
+  DECLARE_OBJ("wfq12",  "Wait-free-Queue-2012", "atomic-queue");
 
-  if ((lib_object = obj_id(argv[1])) < 0) {
-    cerr << "Invalid data structure name \"" << argv[1] << "\"; see --help for usage." << endl;
-    exit(-1);
-  }
+	k = DEFAULT_K;
+	num_segments = DEFAULT_NUM_SEGMENTS;
+	num_queues = DEFAULT_NUM_QUEUES;
+	partitions = DEFAULT_PARTITIONS;
+	dequeue_mode = DEFAULT_DEQUEUE_MODE;
+	dequeue_timeout = DEFAULT_DEQUEUE_TIMEOUT;
+	num_ops = DEFAULT_NUM_OPS;
+	quasi_factor = DEFAULT_QUASI_FACTOR;
+	max_retries = DEFAULT_MAX_RETRIES;
+	delay = DEFAULT_DELAY;
+	helping_delay = DEFAULT_HELPING_DELAY;
 
-  if (obj_order(lib_object) == FIFO_ORDER)
-    spec_object = MS_QUEUE;
-  else
-    spec_object = lib_object;
-
-  // TODO are we initializing these correctly?
-  // TODO investigate!
-  uint64_t tlsize = 4;
-  g_num_threads = 4;
+	g_num_threads = num_threads;
+  uint64_t tlsize = scal::human_size_to_pages(
+    DEFAULT_PAGE_SIZE.c_str(),DEFAULT_PAGE_SIZE.size());
   scal::tlalloc_init(tlsize, true /* touch pages */);
-  //threadlocals_init();
   scal::ThreadContext::prepare(g_num_threads + 1);
   scal::ThreadContext::assign_context();
+}
 
-  violin_mode_t mode;
-  if (FLAGS_mode.find("none") != string::npos)
-    mode = NOTHING_MODE;
-  else if (FLAGS_mode.find("-skip-atomic") != string::npos)
-    mode = LIN_SKIP_ATOMIC_MODE;
-  else if (FLAGS_mode.find("lin") != string::npos)
-    mode = LINEARIZATIONS_MODE;
-  else if (FLAGS_mode.find("versus") != string::npos)
-    mode = VERSUS_MODE;
-  else if (FLAGS_mode.find("-no-verify") != string::npos)
-    mode = COUNTING_NO_VERIFY_MODE;
+Pool<int>* obj_create(string obj) {
+  if (obj == "bkq")
+    return new BoundedSizeKFifo<int>(k, num_segments);
+  else if (obj == "dq")
+    return new DistributedQueue< int, MSQueue<int> >(num_queues,g_num_threads+1,new BalancerPartitionedRoundRobin(partitions,num_queues));
+  else if (obj == "dtsq")
+    return (Pool<int>*) new DTSQueue<int>();
+  else if (obj == "lbq")
+    return (Pool<int>*) new LockBasedQueue<int>(dequeue_mode,dequeue_timeout);
+  else if (obj == "msq")
+    return new MSQueue<int>();
+  else if (obj == "fcq")
+    return new FlatCombiningQueue<int>(num_ops);
+  else if (obj == "ks")
+    return new KStack<int>(k,g_num_threads+1);
+  else if (obj == "rdq")
+    return new RandomDequeueQueue<int>(quasi_factor, max_retries);
+  else if (obj == "sl")
+    return new SingleList<int>();
+  else if (obj == "ts")
+    return new TreiberStack<int>();
+  else if (obj == "tsd")
+    return new TSDeque<int,TSDequeBuffer<int,HardwareTimestamp>,HardwareTimestamp>(g_num_threads+1, delay);
+  else if (obj == "tsq")
+    return new TSQueue<int,TSQueueBuffer<int,HardwareTimestamp>,HardwareTimestamp>(g_num_threads+1, delay);
+  else if (obj == "tss")
+    return new TSStack<int,TSStackBuffer<int,HardwareTimestamp>,HardwareTimestamp>(g_num_threads+1, delay);
+  else if (obj == "ukq")
+    return new UnboundedSizeKFifo<int>(k);
+  else if (obj == "wfq11")
+    return new WaitfreeQueue<int>(g_num_threads+1);
+  // else if (obj == "wfq12")
+  //   return new WaitfreeQueue<int>(g_num_threads+1, max_retries, helping_delay);
   else
-    mode = COUNTING_MODE;
+    assert(false && "Unexpected object name.");
+}
 
-  violin_alloc_policy_t alloc;
-  switch (FLAGS_alloc) {
-  case 0: alloc = DEFAULT_ALLOC; break;
-  case 1: alloc = LRF_ALLOC; break;
-  default: alloc = MRF_ALLOC; break;
-  }
-
-  violin_show_t show;
-  if (FLAGS_show.find("none") != string::npos)
-    show = SHOW_NONE;
-  else if (FLAGS_show.find("viol") != string::npos)
-    show = SHOW_VIOLATIONS;
-  else if (FLAGS_show.find("win") != string::npos)
-    show = SHOW_WINS;
+string obj_name(string id) {
+  if (objects.count(id) > 0)
+    return objects[id].name;
   else
-    show = SHOW_ALL;
+    return "???";
+}
 
-  cout << "Selected SCAL data structure: " << obj_name(lib_object) << endl;
-  violin(
-    {.initialize = obj_reset, .add = obj_add, .remove = obj_rem},
-    {.initialize = spec_reset, .add = spec_add, .remove = spec_rem},
-    FLAGS_adds,
-    FLAGS_removes,
-    mode,
-    alloc,
-    obj_order(lib_object),
-    FLAGS_barriers,
-    FLAGS_delays,
-    show
-  );
-  return 0;
+string obj_spec(string id) {
+  if (objects.count(id) > 0)
+    return objects[id].spec;
+  else
+    return "???";
+}
+
+void* scal_object_create(const char* id) {
+  return static_cast<void*>(obj_create(string(id)));
+}
+
+const char* scal_object_name(const char* id) {
+  return obj_name(string(id)).c_str();
+}
+
+const char* scal_object_spec(const char* id) {
+  return obj_spec(string(id)).c_str();
+}
+
+void scal_object_put(void* obj, int v) {
+  ensure_thread_initialized();
+  static_cast<Pool<int>*>(obj)->put(v);
+}
+
+int scal_object_get(void* obj) {
+  int result;
+  ensure_thread_initialized();
+  if (static_cast<Pool<int>*>(obj)->get(&result))
+    return result;
+  else
+    return -1;
 }

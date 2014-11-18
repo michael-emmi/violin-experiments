@@ -13,7 +13,9 @@ Coro *scheduler;
 Coro *current;
 bool completed;
 
-void Yield() {
+#define Yield DoYield
+
+void DoYield() {
   Coro_switchTo_(current, scheduler);
 }
 

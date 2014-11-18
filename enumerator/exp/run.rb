@@ -386,7 +386,6 @@ def plot_history_coverage(opts = {})
     set style line 4 lt rgb "#999999" lw 2
     set style line 5 lt rgb "#CCCCCC" lw 2
     set style line 6 lt rgb "#DDDDDD" lw 2
-    set style line 7 lt rgb "#EEEEEE" lw 2
     set tic scale 0
     unset xtics
     # set xtics nomirror rotate by 45 right font ",4"
@@ -396,8 +395,7 @@ def plot_history_coverage(opts = {})
       #{wrap(data,',')} using #{col[:c4_covered]} title "Covered w/ k=4" ls 3, \
       #{wrap(data,',')} using #{col[:c3_covered]} title "Covered w/ k=3" ls 4, \
       #{wrap(data,',')} using #{col[:c2_covered]} title "Covered w/ k=2" ls 5, \
-      #{wrap(data,',')} using #{col[:c1_covered]} title "Covered w/ k=1" ls 6, \
-      #{wrap(data,',')} using #{col[:c0_covered]} title "Covered w/ k=0" ls 7
+      #{wrap(data,',')} using #{col[:c1_covered]} title "Covered w/ k=1" ls 6
     xxx
   end
 end
