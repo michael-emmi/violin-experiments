@@ -55,18 +55,14 @@ unsigned delay;
 unsigned helping_delay;
 
 map<string,obj_desc> objects;
+map<uint64_t,bool> thread_initialized;
 
-vector<bool> thread_initialized;
-
-void ensure_thread_initialized() {
-  uint64_t id = scal::ThreadContext::get().thread_id();
-  while (thread_initialized.size() <= id)
-    thread_initialized.push_back(false);
-  if (!thread_initialized[id]) {
-    uint64_t tlsize = scal::human_size_to_pages(
-      DEFAULT_PAGE_SIZE.c_str(),DEFAULT_PAGE_SIZE.size());
-    scal::tlalloc_init(tlsize, true /* touch pages */);
-  }
+void thread_initialize(uint64_t id) {
+  if (!id || thread_initialized.count(id)) return;
+  thread_initialized[id] = true;
+  uint64_t tlsize = scal::human_size_to_pages(
+    DEFAULT_PAGE_SIZE.c_str(),DEFAULT_PAGE_SIZE.size());
+  scal::tlalloc_init(tlsize, true /* touch pages */);
 }
 
 #define DECLARE_OBJ(ID,NAME,SPEC) \
@@ -103,9 +99,7 @@ void scal_initialize(unsigned num_threads) {
 	helping_delay = DEFAULT_HELPING_DELAY;
 
 	g_num_threads = num_threads;
-  uint64_t tlsize = scal::human_size_to_pages(
-    DEFAULT_PAGE_SIZE.c_str(),DEFAULT_PAGE_SIZE.size());
-  scal::tlalloc_init(tlsize, true /* touch pages */);
+  thread_initialize(0);
   scal::ThreadContext::prepare(g_num_threads + 1);
   scal::ThreadContext::assign_context();
 }
@@ -174,13 +168,15 @@ const char* scal_object_spec(const char* id) {
 }
 
 void scal_object_put(void* obj, int v) {
-  ensure_thread_initialized();
+  thread_initialize(scal::ThreadContext::get().thread_id());
+
   static_cast<Pool<int>*>(obj)->put(v);
 }
 
 int scal_object_get(void* obj) {
   int result;
-  ensure_thread_initialized();
+  thread_initialize(scal::ThreadContext::get().thread_id());
+
   if (static_cast<Pool<int>*>(obj)->get(&result))
     return result;
   else
