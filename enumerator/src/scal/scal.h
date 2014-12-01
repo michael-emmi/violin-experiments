@@ -31,8 +31,10 @@ void scal_initialize(unsigned num_threads);
 void scal_object_put(void* obj, int v);
 int scal_object_get(void* obj);
 
+void dilly_dally();
+
 #ifndef Yield
-  #define Yield() ;
+  #define Yield() dilly_dally();
 #endif
 
 #endif

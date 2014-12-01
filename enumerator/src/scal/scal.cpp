@@ -1,6 +1,7 @@
 #include <gflags/gflags.h>
 #include <sstream>
 #include <map>
+#include <math.h>
 #include <iostream>
 
 #include "scal.h"
@@ -185,4 +186,12 @@ int scal_object_get(void* obj) {
     return result;
   else
     return -1;
+}
+
+void dilly_dally() {
+  int x = rand();
+  if ((x % 2) == 0) {
+    int us = 1 << (x % 10 + 8);
+    usleep( us );
+  }
 }
