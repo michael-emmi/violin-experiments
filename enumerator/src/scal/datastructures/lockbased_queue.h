@@ -30,7 +30,7 @@ struct Node {
 }  // namespace lb_details
 
 template<typename T>
-class LockBasedQueue : Queue<T> {
+class LockBasedQueue : public Queue<T> {
  public:
   LockBasedQueue(uint64_t dequeue_mode, uint64_t dequeue_timeout);
   bool enqueue(T item);

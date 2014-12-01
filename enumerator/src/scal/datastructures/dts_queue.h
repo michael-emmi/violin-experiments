@@ -21,7 +21,7 @@
 #define DTS_DEBUG
 
 template<typename T>
-class DTSQueue : Queue<T>{
+class DTSQueue : public Queue<T>{
   private:
     typedef struct Item {
       std::atomic<Item*> next;
@@ -59,6 +59,9 @@ class DTSQueue : Queue<T>{
     }
 
   public:
+    DTSQueue(uint64_t num_threads) {
+      initialize(num_threads);
+    }
     void initialize(uint64_t num_threads) {
 
       num_threads_ = num_threads;

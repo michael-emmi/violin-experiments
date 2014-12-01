@@ -48,7 +48,7 @@ unsigned num_queues;
 unsigned partitions;
 unsigned dequeue_mode;
 unsigned dequeue_timeout;
-unsigned num_ops;
+unsigned num_ops;               // must be at least the number of threads
 unsigned quasi_factor;
 unsigned max_retries;
 unsigned delay;
@@ -58,7 +58,7 @@ map<string,obj_desc> objects;
 map<uint64_t,bool> thread_initialized;
 
 void thread_initialize(uint64_t id) {
-  if (!id || thread_initialized.count(id)) return;
+  if (thread_initialized.count(id)) return;
   thread_initialized[id] = true;
   uint64_t tlsize = scal::human_size_to_pages(
     DEFAULT_PAGE_SIZE.c_str(),DEFAULT_PAGE_SIZE.size());
@@ -92,7 +92,7 @@ void scal_initialize(unsigned num_threads) {
 	partitions = DEFAULT_PARTITIONS;
 	dequeue_mode = DEFAULT_DEQUEUE_MODE;
 	dequeue_timeout = DEFAULT_DEQUEUE_TIMEOUT;
-	num_ops = DEFAULT_NUM_OPS;
+	num_ops = max(DEFAULT_NUM_OPS,num_threads);
 	quasi_factor = DEFAULT_QUASI_FACTOR;
 	max_retries = DEFAULT_MAX_RETRIES;
 	delay = DEFAULT_DELAY;
@@ -108,17 +108,19 @@ Pool<int>* obj_create(string obj) {
   if (obj == "bkq")
     return new BoundedSizeKFifo<int>(k, num_segments);
   else if (obj == "dq")
-    return new DistributedQueue< int, MSQueue<int> >(num_queues,g_num_threads+1,new BalancerPartitionedRoundRobin(partitions,num_queues));
+    return new DistributedQueue< int, MSQueue<int> >(num_queues,g_num_threads,new BalancerPartitionedRoundRobin(partitions,num_queues));
   else if (obj == "dtsq")
-    return (Pool<int>*) new DTSQueue<int>();
+    // FIXME malloc-checksum error in the constructor
+    return new DTSQueue<int>(g_num_threads);
   else if (obj == "lbq")
-    return (Pool<int>*) new LockBasedQueue<int>(dequeue_mode,dequeue_timeout);
+    return new LockBasedQueue<int>(dequeue_mode, dequeue_timeout);
   else if (obj == "msq")
     return new MSQueue<int>();
   else if (obj == "fcq")
     return new FlatCombiningQueue<int>(num_ops);
   else if (obj == "ks")
-    return new KStack<int>(k,g_num_threads+1);
+    // FIXME segmentation fault in the consructor
+    return new KStack<int>(k, g_num_threads);
   else if (obj == "rdq")
     return new RandomDequeueQueue<int>(quasi_factor, max_retries);
   else if (obj == "sl")
@@ -126,17 +128,20 @@ Pool<int>* obj_create(string obj) {
   else if (obj == "ts")
     return new TreiberStack<int>();
   else if (obj == "tsd")
-    return new TSDeque<int,TSDequeBuffer<int,HardwareTimestamp>,HardwareTimestamp>(g_num_threads+1, delay);
+    // FIXME malloc-checksum error in the constructor
+    return new TSDeque<int,TSDequeBuffer<int,HardwareTimestamp>,HardwareTimestamp>(g_num_threads, delay);
   else if (obj == "tsq")
-    return new TSQueue<int,TSQueueBuffer<int,HardwareTimestamp>,HardwareTimestamp>(g_num_threads+1, delay);
+    // FIXME malloc-checksum error in the constructor
+    return new TSQueue<int,TSQueueBuffer<int,HardwareTimestamp>,HardwareTimestamp>(g_num_threads, delay);
   else if (obj == "tss")
-    return new TSStack<int,TSStackBuffer<int,HardwareTimestamp>,HardwareTimestamp>(g_num_threads+1, delay);
+    // FIXME malloc-checksum error in the constructor
+    return new TSStack<int,TSStackBuffer<int,HardwareTimestamp>,HardwareTimestamp>(g_num_threads, delay);
   else if (obj == "ukq")
     return new UnboundedSizeKFifo<int>(k);
   else if (obj == "wfq11")
-    return new WaitfreeQueue<int>(g_num_threads+1);
+    return new WaitfreeQueue<int>(g_num_threads);
   // else if (obj == "wfq12")
-  //   return new WaitfreeQueue<int>(g_num_threads+1, max_retries, helping_delay);
+  //   return new WaitfreeQueue<int>(g_num_threads, max_retries, helping_delay);
   else
     assert(false && "Unexpected object name.");
 }
@@ -176,7 +181,6 @@ void scal_object_put(void* obj, int v) {
 int scal_object_get(void* obj) {
   int result;
   thread_initialize(scal::ThreadContext::get().thread_id());
-
   if (static_cast<Pool<int>*>(obj)->get(&result))
     return result;
   else
