@@ -94,6 +94,7 @@ template<typename T>
 bool LockBasedQueue<T>::enqueue(T item) {
   Node *node = scal::tlget<Node>(kPtrAlignment);
   node->value = item;
+  Yield();
   int rc = pthread_mutex_lock(global_lock_);
   check_error("pthread_mutex_lock", rc);
   Node *tail_old = tail_;
@@ -102,22 +103,26 @@ bool LockBasedQueue<T>::enqueue(T item) {
   rc = pthread_cond_broadcast(enqueue_cond_);
   check_error("pthread_cond_broadcast", rc);
   rc = pthread_mutex_unlock(global_lock_);
+  Yield();
   check_error("pthread_mutex_unlock", rc);
   return true;
 }
 
 template<typename T>
 bool LockBasedQueue<T>::dequeue_default(T *item) {
+  Yield();
   int rc = pthread_mutex_lock(global_lock_);
   check_error("pthread_mutex_lock", rc);
   if (head_ == tail_) {
     pthread_mutex_unlock(global_lock_);
+    Yield();
     check_error("pthread_mutex_unlock", rc);
     return false;
   }
   *item = head_->next->value;
   head_ = head_->next;
   rc = pthread_mutex_unlock(global_lock_);
+  Yield();
   check_error("pthread_mutex_unlock", rc);
   return true;
 }
@@ -126,15 +131,18 @@ template<typename T>
 bool LockBasedQueue<T>::dequeue_blocking(T *item) {
   int rc;
   while (true) {
+    Yield();
     rc = pthread_mutex_lock(global_lock_);
     check_error("pthread_mutex_lock", rc);
     while (head_ == tail_) {
       pthread_cond_wait(enqueue_cond_, global_lock_);
+      Yield();
     }
     assert(head_ != tail_);
     *item = head_->next->value;
     head_ = head_->next;
     rc = pthread_mutex_unlock(global_lock_);
+    Yield();
     check_error("pthread_mutex_unlock", rc);
     return true;
   }
@@ -161,12 +169,15 @@ bool LockBasedQueue<T>::dequeue_timeout(T *item, uint64_t timeout_ms) {
   }
 
   while (true) {
+    Yield();
     rc =pthread_mutex_lock(global_lock_);
     check_error("pthread_mutex_lock", rc);
     while (head_ == tail_) {
       rc = pthread_cond_timedwait(enqueue_cond_, global_lock_, &ts);
+      Yield();
       if (rc == ETIMEDOUT) {
         rc = pthread_mutex_unlock(global_lock_);
+        Yield();
         check_error("pthread_mutex_unlock", rc);
         return false;
       }
@@ -176,6 +187,7 @@ bool LockBasedQueue<T>::dequeue_timeout(T *item, uint64_t timeout_ms) {
     *item = head_->next->value;
     head_ = head_->next;
     rc = pthread_mutex_unlock(global_lock_);
+    Yield();
     check_error("pthread_mutex_unlock", rc);
     return true;
   }

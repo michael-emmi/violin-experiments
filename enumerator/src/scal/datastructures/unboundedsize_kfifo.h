@@ -108,11 +108,13 @@ void UnboundedSizeKFifo<T>::advance_head(
         }
         if (tail_current.raw() == get_tail().raw()) {
           tail_next_ksegment.set_aba(tail_current.aba() + 1);
+          Yield();
           tail_->cas(tail_current, tail_next_ksegment);
         }
       }
       head_old.value()->deleted = true;
       head_next_ksegment.set_aba(head_old.aba() + 1);
+      Yield();
       head_->cas(head_old, head_next_ksegment);
     }
   }
@@ -128,13 +130,16 @@ void UnboundedSizeKFifo<T>::advance_tail(
     if (tail_old.raw() == get_tail().raw()) {
       if (next_ksegment.value() != NULL) {
         next_ksegment.set_aba(next_ksegment.aba() + 1);
+        Yield();
         tail_->cas(tail_old, next_ksegment);
       } else {
         KSegment *ksegment = ksegment_new();
         AtomicPointer<KSegment*> new_ksegment(
             ksegment, next_ksegment.aba() + 1);
+        Yield();
         if (tail_old.value()->next.cas(next_ksegment, new_ksegment)) {
           new_ksegment.set_aba(tail_old.aba() + 1);
+          Yield();
           tail_->cas(tail_old, new_ksegment);
         }
       }
@@ -173,15 +178,18 @@ bool UnboundedSizeKFifo<T>::committed(
 
   if (tail_old.value()->deleted == true) {
     // Not in queue anymore.
+    Yield();
     if (!tail_old.value()->items[item_index]->cas(*new_item, empty_item)) {
       return true;
     }
   } else if (tail_old.value() == head_current.value()) {
     AtomicPointer<KSegment*> head_new = head_current;
     head_new.weak_set_aba(head_new.aba() + 1);
+    Yield();
     if (head_->cas(head_current, head_new)) {
       return true;
     }
+    Yield();
     if (!tail_old.value()->items[item_index]->cas(*new_item, empty_item)) {
       return true;
     }
@@ -189,6 +197,7 @@ bool UnboundedSizeKFifo<T>::committed(
     // In queue and inserted tail not head.
     return true;
   } else {
+    Yield();
     if (!tail_old.value()->items[item_index]->cas(*new_item, empty_item)) {
       return true;
     }
@@ -212,6 +221,7 @@ bool UnboundedSizeKFifo<T>::dequeue(T *item) {
           advance_tail(tail_old);
         }
         AtomicValue<T> newcp((T)NULL, old_item.aba() + 1);
+        Yield();
         if (head_old.value()->items[item_index]->cas(old_item, newcp)) {
           *item = old_item.value();
           return true;
@@ -239,10 +249,13 @@ bool UnboundedSizeKFifo<T>::enqueue(T item) {
   while (true) {
     tail_old = get_tail();
     head_old = get_head();
+    Yield();
     find_index(tail_old.value(), true, &item_index, &old_item);
     if (tail_old.raw() == tail_->raw()) {
       if (item_index != kNoIndexFound) {
+        Yield();
         AtomicValue<T> newcp(item, old_item.aba() + 1);
+        Yield();
         if (tail_old.value()->items[item_index]->cas(old_item, newcp)) {
           if (committed(tail_old, &newcp, item_index)) {
             return true;

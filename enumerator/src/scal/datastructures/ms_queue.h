@@ -189,10 +189,12 @@ bool MSQueue<T>::dequeue_return_tail(T *item, AtomicRaw *tail_raw) {
           return false;
         }
         AtomicPointer<Node*> tail_new(next.value(), tail_old.aba() + 1);
+        Yield();
         tail_->cas(tail_old, tail_new);
       } else {
         *item = next.value()->value;
         AtomicPointer<Node*> head_new(next.value(), head_old.aba() + 1);
+        Yield();
         if (head_->cas(head_old, head_new)) {
           scal::StdOperationLogger::get().linearization();
           *tail_raw = tail_old.raw();
@@ -212,14 +214,17 @@ bool MSQueue<T>::try_enqueue(
     if (next.value() == NULL) {
       Node *node = node_new(item);
       AtomicPointer<Node*> new_next(node, next.aba() + 1);
+      Yield();
       if (tail_old.value()->next.cas(next, new_next)) {
         scal::StdOperationLogger::get().linearization();
         AtomicPointer<Node*> tail_new(node, tail_old.aba() + 1);
+        Yield();
         tail_->cas(tail_old, tail_new);
         return true;
       }
     } else {
       AtomicPointer<Node*> tail_new(next.value(), tail_old.aba() + 1);
+      Yield();
       tail_->cas(tail_old, tail_new);
     }
   }
@@ -239,11 +244,13 @@ uint8_t MSQueue<T>::try_dequeue(
         return 1;  // empty
       }
       AtomicPointer<Node*> tail_new(next.value(), tail_old.aba() + 1);
+      Yield();
       tail_->cas(tail_old, tail_new);
       *tail_raw = tail_new.aba();
     } else {
       *item = next.value()->value;
       AtomicPointer<Node*> head_new(next.value(), head_old.aba() + 1);
+      Yield();
       if (head_->cas(head_old, head_new)) {
         scal::StdOperationLogger::get().linearization();
         *tail_raw = tail_old.aba();

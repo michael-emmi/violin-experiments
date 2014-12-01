@@ -109,6 +109,7 @@ inline bool TreiberStack<T>::get_return_empty_state(T *item, AtomicRaw *state) {
     }
     top_new.weak_set_value(top_old.value()->next.value());
     top_new.weak_set_aba(top_old.aba() + 1);
+    Yield();
   } while (!top_->cas(top_old, top_new));
   *item = top_old.value()->data;
   *state = top_old.raw();

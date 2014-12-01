@@ -78,10 +78,12 @@ void FlatCombiningQueue<T>::scan_combine_apply(void) {
   for (uint64_t i = 0; i < num_ops_; i++) {
     if (operations_[i]->opcode == Opcode::Enqueue) {
       queue_->enqueue(operations_[i]->data);
+      Yield();
       set_op(i, Opcode::Done, (T)NULL);
     } else if (operations_[i]->opcode == Opcode::Dequeue) {
       if (!queue_->is_empty()) {
         T item;
+        Yield();
         queue_->dequeue(&item);
         set_op(i, Opcode::Done, item);
       } else {
@@ -97,6 +99,7 @@ bool FlatCombiningQueue<T>::enqueue(T item) {
   uint64_t thread_id = scal::ThreadContext::get().thread_id();
   set_op(thread_id, Opcode::Enqueue, item);
   while (true) {
+    Yield();
     if (!__sync_bool_compare_and_swap(global_lock_, false, true)) {
       if (operations_[thread_id]->opcode == Opcode::Done) {
         return true;
@@ -114,6 +117,7 @@ bool FlatCombiningQueue<T>::dequeue(T *item) {
   uint64_t thread_id = scal::ThreadContext::get().thread_id();
   set_op(thread_id, Opcode::Dequeue, (T)NULL);
   while (true) {
+    Yield();
     if (!__sync_bool_compare_and_swap(global_lock_, false, true)) {
       if (operations_[thread_id]->opcode == Opcode::Done) {
         break;
