@@ -165,6 +165,10 @@ void* scal_object_create(const char* id) {
   return static_cast<void*>(obj_create(string(id)));
 }
 
+void scal_object_delete(void* obj) {
+  delete static_cast<Pool<int>*>(obj);
+}
+
 const char* scal_object_name(const char* id) {
   return obj_name(string(id)).c_str();
 }

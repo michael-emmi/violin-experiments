@@ -6,11 +6,13 @@
 using namespace std;
 
 extern "C" {
-  void* scal_object_create(const char* id);
   const char* scal_object_name(const char* id);
   const char* scal_object_spec(const char* id);
 
   void scal_initialize(unsigned num_threads);
+
+  void* scal_object_create(const char* id);
+  void scal_object_delete(void*);
   void scal_object_put(void*,int);
   int scal_object_get(void*);
 }
@@ -23,11 +25,13 @@ struct obj_desc {
 
 extern map<string,obj_desc> objects;
 
-Pool<int>* obj_create(string obj);
 string obj_name(string id);
 string obj_spec(string id);
 
 void scal_initialize(unsigned num_threads);
+
+Pool<int>* obj_create(string obj);
+void scal_object_delete(void*);
 void scal_object_put(void* obj, int v);
 int scal_object_get(void* obj);
 
