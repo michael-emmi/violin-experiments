@@ -193,6 +193,9 @@ int scal_object_get(void* obj) {
 }
 
 void dilly_dally() {
+  if (g_num_threads < 2)
+    return;
+
   int x = rand();
   if ((x % 2) == 0) {
     int us = 1 << (x % 10 + 8);
